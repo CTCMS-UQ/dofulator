@@ -4,14 +4,22 @@
 #include "dofulator.h"
 
 typedef struct Fragment_t {
-  AtomList atoms;   // Atoms part of the rigid/semi-rigid fragment. Not owned, must outlive the fragment.
-  unsigned n_modes; // Number of modes (upper bound)
-  double* M;        // per-atom mass matrix
-  double* C;        // Constraint matrix
-  double* R;        // Eigenvectors of Itot. R^T R == 1, R^T Itot R == diagonal
-  double* Iatom;    // Modal inertia of each atom == R^T C^T M_i C R (length 3*atoms.n * 3*atoms.n)
-  double* Imodal;   // Total modal inertia == R^T C^T M C R (length atoms.n)
-  double buf[];     // Data storage block
+  unsigned natoms;  // Number of atoms in the fragment
+  unsigned nmodes;  // Maximum number of modes. Some could have zero inertia, in
+                    // which case they are not a real DoF.
+
+  double *mC;       // M^1/2 C, where C = constraint matrix, M = diagonal per-atom,
+                    // per-direction mass matrix. C^T C = lab-frame inertia of
+                    // internal modes (Itot) [3*natoms][nmodes]
+
+  double* mCR;      // Stores M^1/2 C R, where R = eigenvectors of C^T M C.
+                    // R^T Itot R == mCR^T mCR is diagonal. [3*natoms][nmodes]
+
+  double* Imodal;   // Total modal inertia == diag(mCR^T mCR), summed over sets of 3
+                    // for 3 cartesian directions of each atom [natoms]
+
+  double R[];       // Eigenvectors of Itot == C^T M C == mC^T mC. [nmodes][nmodes]
+
 } Fragment_t;
 
 Fragment_t* fragment_eval(Fragment_t* frag);

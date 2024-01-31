@@ -11,39 +11,26 @@
 
 /* =============================================================================
  *
- * Allocate space for a fragment and initialise its atom list to `atoms` and 
- * its mass matrix (`M`) from the atom masses.
+ * Allocate space for a fragment and set pointers
  *
 */
 static inline Fragment_t* fragment_alloc(AtomList atoms) {
   if (atoms.n == 0) return NULL;
 
-  // Need to store five matrices each up to 3n x 3n,
-  // plus one more as scratch space
+  // Need to store three matrices each up to 3n x 3n,
+  // plus one array of length n
   unsigned mat_sz = 3 * atoms.n * 3 * atoms.n;
   Fragment_t* frag = (Fragment_t*)calloc(1,
-    sizeof(Fragment_t) + sizeof(double) * 6*mat_sz);
+    sizeof(Fragment_t) + sizeof(double) * (3*mat_sz + atoms.n));
   if (!frag) return NULL;
 
-  frag->atoms = atoms;
-  // buf[0..mat_sz] used as temporary scratch space
-  frag->M = &frag->buf[mat_sz];
-  frag->C = &frag->buf[2*mat_sz];
-  frag->R = &frag->buf[3*mat_sz];
-  frag->Imodal  = &frag->buf[4*mat_sz];
-  frag->Iatom = &frag->buf[5*mat_sz];
-
-  // Construct mass matrix - block diagonal of atomic mass times 3x3 identity
-  double (*M)[3*atoms.n][3*atoms.n] = (double(*)[3*atoms.n][3*atoms.n])frag->M;
-  for (unsigned i = 0; i < atoms.n; ++i) {
-    (*M)[3*i][3*i]     = atoms.mass[i];
-    (*M)[3*i+1][3*i+1] = atoms.mass[i];
-    (*M)[3*i+2][3*i+2] = atoms.mass[i];
-  }
+  frag->natoms = atoms.n;
+  frag->mC = &frag->R[mat_sz];
+  frag->mCR = &frag->R[2*mat_sz];
+  frag->Imodal = &frag->R[3*mat_sz];
 
   return frag;
 }
-
 
 /* =============================================================================
  *
@@ -82,11 +69,12 @@ Fragment fragment_create_rigid(AtomList atoms) {
   Fragment_t* frag = fragment_alloc(atoms);
   if (!frag) return NULL;
 
-  double (*C)[3*atoms.n][3*atoms.n] = (double(*)[3*atoms.n][3*atoms.n])frag->C;
+  double (*mC)[3*atoms.n][3*atoms.n] = (double(*)[3*atoms.n][3*atoms.n])frag->mC;
   Vec3 rij;
-  (*C)[0][0] = (*C)[1][1] = (*C)[2][2] = 1.0;
+  (*mC)[0][0] = (*mC)[1][1] = (*mC)[2][2] = sqrt(atoms.mass[0]);
   for (unsigned i = 1; i < atoms.n; ++i) {
-    (*C)[3*i][0] = (*C)[3*i+1][1] = (*C)[3*i+2][2] = 1.0;
+    const double root_m = sqrt(atoms.mass[i]);
+    (*mC)[3*i][0] = (*mC)[3*i+1][1] = (*mC)[3*i+2][2] = root_m;
     rij = vec_sub(&atoms.pos[3*i], &atoms.pos[0]);
 
     /* Store negative cross operator matrix
@@ -94,18 +82,18 @@ Fragment fragment_create_rigid(AtomList atoms) {
      * -z   0    x
      *  y  -x    0
      */
-    (*C)[3*i][4] = rij.z;
-    (*C)[3*i][5] = -rij.y;
+    (*mC)[3*i][4] = root_m * rij.z;
+    (*mC)[3*i][5] = -root_m * rij.y;
 
-    (*C)[3*i+1][3] = -rij.z;
-    (*C)[3*i+1][5] = rij.x;
+    (*mC)[3*i+1][3] = -root_m * rij.z;
+    (*mC)[3*i+1][5] = root_m * rij.x;
 
-    (*C)[3*i+2][3] = rij.y;
-    (*C)[3*i+2][4] = -rij.x;
+    (*mC)[3*i+2][3] = root_m * rij.y;
+    (*mC)[3*i+2][4] = -root_m * rij.x;
   }
 
   // Maximum possible number of modes
-  frag->n_modes = atoms.n > 1 ? 6 : 3;
+  frag->nmodes = atoms.n > 1 ? 6 : 3;
 
   return (Fragment)fragment_eval(frag);
 }
@@ -119,19 +107,13 @@ Fragment fragment_create_rigid(AtomList atoms) {
  *
 */
 Fragment_t* fragment_eval(Fragment_t* frag) {
-  const unsigned n = frag->atoms.n;
-  const blasint modes = frag->n_modes;
+  const unsigned n = frag->natoms;
+  const unsigned modes = frag->nmodes;
 
-  // Get lab-frame inertia tensor
-  // TODO: better blas routines for this? Take advantage of M being diagonal?
-  // C^T M
-  cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans, modes, 3*n, 3*n,
-              1.0, frag->C, 3*n, frag->M, 3*n, 0.0, frag->buf, 3*n);
-  // (C^T M) C
-  cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, modes, modes, 3*n,
-              1.0, frag->buf, 3*n, frag->C, 3*n, 0.0, frag->R, modes);
-  // Stored total lab-frame inertia in R since will be overwritten with eigenvectors
-  // and won't be needed after that point.
+  // Get lab-frame inertia tensor == C^T C
+  // Store in R since it will be overwritten by eigenvectors
+  cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans, modes, modes, 3*n,
+              1.0, frag->mC, 3*n, frag->mC, 3*n, 0.0, frag->R, modes);
 
   // Find eigenvalues/eigenvectors of inertia tensor
   lapack_int info = LAPACKE_dsyev(LAPACK_ROW_MAJOR, 'V', 'L', modes,
@@ -142,27 +124,16 @@ Fragment_t* fragment_eval(Fragment_t* frag) {
   }
 
   // Calculate modal inertias:
-  // I_mode = R^T C^T M C R = R_mode^T lambda_mode R_mode = lambda_mode R_mode dot R_mode
-  for (unsigned m = 0; m < frag->n_modes; ++m) {
+  // I_mode = R^T C^T M C R
+  //        = R_mode^T lambda_mode R_mode
+  //        = lambda_mode R_mode dot R_mode
+  for (unsigned m = 0; m < modes; ++m) {
     frag->Imodal[m] *= cblas_ddot(modes, &frag->R[m], modes, &frag->R[m], modes);
   }
 
-  // The transform from modal motion to lab motion == C R
-  // No longer need buf, so store R <- C R
+  // Store the full transform M^1/2 C R for later to get per-atom modal inertia
   cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, 3*n, modes, modes,
-              1.0, frag->C, 3*n, frag->R, modes, 0.0, frag->buf, modes);
-
-  // For each atom, store the x,y,z modal inertia in Iatom
-  double (*Iatom)[modes][3*n] = (double(*)[modes][3*n])frag->Iatom;
-  double (*CR)[3*n][modes] = (double(*)[3*n][modes])frag->buf;
-
-  for (unsigned i = 0; i < n; ++i) {
-    for (unsigned m = 0; m < frag->n_modes; ++m) {
-      (*Iatom)[m][3*i]   = frag->atoms.mass[i] * (*CR)[3*i][m]   * (*CR)[3*i][m];
-      (*Iatom)[m][3*i+1] = frag->atoms.mass[i] * (*CR)[3*i+1][m] * (*CR)[3*i+1][m];
-      (*Iatom)[m][3*i+2] = frag->atoms.mass[i] * (*CR)[3*i+2][m] * (*CR)[3*i+2][m];
-    }
-  }
+              1.0, frag->mC, 3*n, frag->R, modes, 0.0, frag->mCR, modes);
 
   return frag;
 }
@@ -176,15 +147,22 @@ Fragment_t* fragment_eval(Fragment_t* frag) {
 double fragment_dof_atom(const Fragment fragment, unsigned atom) {
   const Fragment_t* frag = (const Fragment_t*)fragment;
   double dof = 0.0;
-  const unsigned n = frag->atoms.n;
-  const unsigned modes = frag->n_modes;
-  double (*Iatom)[modes][3*n] = (double(*)[modes][3*n])frag->Iatom;
+  const unsigned n = frag->natoms;
+  const unsigned modes = frag->nmodes;
+  double (*mCR)[3*n][modes] = (double(*)[3*n][modes])frag->mCR;
+
+  // DoF == sum_modes <atom modal inertia> / <modal inertia>
+  // Atom modal directional inertias == diag(mCR^T mCR) == diag(R^T C^T M C R)
+
   for (unsigned m = 0; m < modes; ++m) {
     if (frag->Imodal[m] > 100*DBL_EPSILON) {
-      dof += ( (*Iatom)[m][3*atom] + (*Iatom)[m][3*atom+1]
-             + (*Iatom)[m][3*atom+2] ) / frag->Imodal[m];
+      double Ix = (*mCR)[3*atom][m] * (*mCR)[3*atom][m];
+      double Iy = (*mCR)[3*atom+1][m] * (*mCR)[3*atom+1][m];
+      double Iz = (*mCR)[3*atom+2][m] * (*mCR)[3*atom+2][m];
+      dof += (Ix + Iy + Iz) / frag->Imodal[m];
     }
   }
+
   return dof;
 }
 
@@ -198,15 +176,20 @@ double fragment_dof_atom_dir(Fragment fragment, unsigned atom, double dir[3]) {
   assert(fabs(dir[0]*dir[0] + dir[1]*dir[1] + dir[2]*dir[2] - 1.0) < 100*DBL_EPSILON);
   const Fragment_t* frag = (const Fragment_t*)fragment;
   double dof = 0.0;
-  const unsigned n = frag->atoms.n;
-  const unsigned modes = frag->n_modes;
-  double (*Iatom)[modes][3*n] = (double(*)[modes][3*n])frag->Iatom;
+  const unsigned n = frag->natoms;
+  const unsigned modes = frag->nmodes;
+  double (*mCR)[3*n][modes] = (double(*)[3*n][modes])frag->mCR;
+
+  // DoF == sum_modes <atom modal inertia> / <modal inertia>
+  // Atom modal directional inertias == diag(mCR^T mCR) == diag(R^T C^T M C R)
+  // Dot product with direction vector to get inertia in that direction.
+
   for (unsigned m = 0; m < modes; ++m) {
     if (frag->Imodal[m] > 100*DBL_EPSILON) {
-      dof += ( (*Iatom)[m][3*atom]   * dir[0]
-             + (*Iatom)[m][3*atom+1] * dir[1]
-             + (*Iatom)[m][3*atom+2] * dir[2]
-             ) / frag->Imodal[m];
+      double Ix = (*mCR)[3*atom][m] * (*mCR)[3*atom][m];
+      double Iy = (*mCR)[3*atom+1][m] * (*mCR)[3*atom+1][m];
+      double Iz = (*mCR)[3*atom+2][m] * (*mCR)[3*atom+2][m];
+      dof += ( Ix*dir[0] + Iy*dir[1] + Iz*dir[2] ) / frag->Imodal[m];
     }
   }
   return dof;
