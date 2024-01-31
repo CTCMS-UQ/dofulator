@@ -24,6 +24,6 @@ typedef struct Fragment_t {
 
 Fragment_t* fragment_eval(Fragment_t* frag);
 
-static inline Fragment_t* fragment_alloc(AtomList atoms);
+static inline Fragment_t* fragment_alloc(AtomList atoms, unsigned max_modes);
 
 #endif

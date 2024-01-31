@@ -14,20 +14,22 @@
  * Allocate space for a fragment and set pointers
  *
 */
-static inline Fragment_t* fragment_alloc(AtomList atoms) {
+static inline Fragment_t* fragment_alloc(AtomList atoms, unsigned max_modes) {
   if (atoms.n == 0) return NULL;
 
-  // Need to store three matrices each up to 3n x 3n,
+  // Need to store two matrices up to 3n x max_modes,
+  // one at max_modes x max_modes,
   // plus one array of length n
-  unsigned mat_sz = 3 * atoms.n * 3 * atoms.n;
+  unsigned mat_sz = 3 * atoms.n * max_modes;
+  unsigned mode_mat_sz = max_modes * max_modes;
   Fragment_t* frag = (Fragment_t*)calloc(1,
-    sizeof(Fragment_t) + sizeof(double) * (3*mat_sz + atoms.n));
+    sizeof(Fragment_t) + sizeof(double) * (mode_mat_sz + 2*mat_sz + atoms.n));
   if (!frag) return NULL;
 
   frag->natoms = atoms.n;
-  frag->mC = &frag->R[mat_sz];
-  frag->mCR = &frag->R[2*mat_sz];
-  frag->Imodal = &frag->R[3*mat_sz];
+  frag->mC     = &frag->R[mode_mat_sz];
+  frag->mCR    = &frag->R[mode_mat_sz + mat_sz];
+  frag->Imodal = &frag->R[mode_mat_sz + 2*mat_sz];
 
   return frag;
 }
@@ -52,7 +54,9 @@ void fragment_destroy(Fragment fragment) {
  *
 */
 Fragment fragment_create_semirigid(AtomList atoms, BondList bonds) {
-  Fragment_t* frag = fragment_alloc(atoms);
+  // Maximum possible number of modes
+  unsigned max_modes = 3*atoms.n;
+  Fragment_t* frag = fragment_alloc(atoms, max_modes);
   if (!frag) return NULL;
 
   return (Fragment)frag;
@@ -66,10 +70,14 @@ Fragment fragment_create_semirigid(AtomList atoms, BondList bonds) {
  *
 */
 Fragment fragment_create_rigid(AtomList atoms) {
-  Fragment_t* frag = fragment_alloc(atoms);
+  // Maximum possible number of modes
+  unsigned max_modes = atoms.n > 1 ? 6 : 3;
+  Fragment_t* frag = fragment_alloc(atoms, max_modes);
   if (!frag) return NULL;
 
-  double (*mC)[3*atoms.n][3*atoms.n] = (double(*)[3*atoms.n][3*atoms.n])frag->mC;
+  frag->nmodes = max_modes;
+
+  double (*mC)[3*atoms.n][max_modes] = (double(*)[3*atoms.n][max_modes])frag->mC;
   Vec3 rij;
   (*mC)[0][0] = (*mC)[1][1] = (*mC)[2][2] = sqrt(atoms.mass[0]);
   for (unsigned i = 1; i < atoms.n; ++i) {
@@ -92,8 +100,6 @@ Fragment fragment_create_rigid(AtomList atoms) {
     (*mC)[3*i+2][4] = -root_m * rij.x;
   }
 
-  // Maximum possible number of modes
-  frag->nmodes = atoms.n > 1 ? 6 : 3;
 
   return (Fragment)fragment_eval(frag);
 }
@@ -102,18 +108,20 @@ Fragment fragment_create_rigid(AtomList atoms) {
 /* =============================================================================
  *
  * Evaluate fragment properties.
- * Assumes C[n_modes][3*atoms.n] and M[3*atoms.n][3*atoms.n] are populated.
- * All others will be calculated by this routine.
+ * Assumes mC[3*natoms][nmodes] has been populated.
+ * R and mCR will be calculated by this routine.
  *
 */
 Fragment_t* fragment_eval(Fragment_t* frag) {
+  assert(frag);
+
   const unsigned n = frag->natoms;
   const unsigned modes = frag->nmodes;
 
   // Get lab-frame inertia tensor == C^T C
   // Store in R since it will be overwritten by eigenvectors
   cblas_dgemm(CblasRowMajor, CblasTrans, CblasNoTrans, modes, modes, 3*n,
-              1.0, frag->mC, 3*n, frag->mC, 3*n, 0.0, frag->R, modes);
+              1.0, frag->mC, modes, frag->mC, modes, 0.0, frag->R, modes);
 
   // Find eigenvalues/eigenvectors of inertia tensor
   lapack_int info = LAPACKE_dsyev(LAPACK_ROW_MAJOR, 'V', 'L', modes,
@@ -133,7 +141,7 @@ Fragment_t* fragment_eval(Fragment_t* frag) {
 
   // Store the full transform M^1/2 C R for later to get per-atom modal inertia
   cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, 3*n, modes, modes,
-              1.0, frag->mC, 3*n, frag->R, modes, 0.0, frag->mCR, modes);
+              1.0, frag->mC, modes, frag->R, modes, 0.0, frag->mCR, modes);
 
   return frag;
 }
