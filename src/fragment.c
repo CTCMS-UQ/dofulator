@@ -19,11 +19,11 @@ static inline Fragment_t* fragment_alloc(AtomList atoms, unsigned max_modes) {
 
   // Need to store two matrices up to 3n x max_modes,
   // one at max_modes x max_modes,
-  // plus one array of length n
+  // plus one array of length max_modes
   unsigned mat_sz = 3 * atoms.n * max_modes;
   unsigned mode_mat_sz = max_modes * max_modes;
   Fragment_t* frag = (Fragment_t*)calloc(1,
-    sizeof(Fragment_t) + sizeof(double) * (mode_mat_sz + 2*mat_sz + atoms.n));
+    sizeof(Fragment_t) + sizeof(double) * (mode_mat_sz + 2*mat_sz + max_modes));
   if (!frag) return NULL;
 
   frag->natoms = atoms.n;
@@ -146,6 +146,19 @@ Fragment_t* fragment_eval(Fragment_t* frag) {
   return frag;
 }
 
+/* =============================================================================
+ *
+ * Calculate the DoF of atom with index `atom`
+ *
+*/
+double fragment_dof(const Fragment fragment) {
+  const Fragment_t* frag = (const Fragment_t*)fragment;
+  double dof = 0.0;
+  for (unsigned i = 0; i < frag->natoms; ++i) {
+    dof += fragment_dof_atom(fragment, i);
+  }
+  return dof;
+}
 
 /* =============================================================================
  *

@@ -33,9 +33,14 @@ Fragment fragment_create_rigid(AtomList atoms);
 // Free resources associated with the fragment
 void fragment_destroy(Fragment fragment);
 
+// Get total DoF of the fragment
+double fragment_dof(const Fragment fragment);
+
 // Get total DoF of an atom (by index)
 double fragment_dof_atom(Fragment fragment, unsigned atom);
 
+// Get DoF of an atom (by index) in the provided direction.
+// `dir` should be a unit vector.
 double fragment_dof_atom_dir(Fragment fragment, unsigned atom, double dir[3]);
 
 #endif
