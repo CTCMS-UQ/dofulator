@@ -106,6 +106,6 @@ int main(void) {
   return run_testset((TestSet){
       .name = "Basic Rigid",
       .tests = basic_rigid,
-      .n = sizeof(basic_rigid) / sizeof(Test),
+      .n = ntests(basic_rigid),
     });
 }

@@ -25,6 +25,6 @@ int main(void) {
   return run_testset((TestSet){
       .name = "Complex Rigid",
       .tests = complex_rigid,
-      .n = sizeof(complex_rigid)/sizeof(Test),
+      .n = ntests(complex_rigid),
     });
 }

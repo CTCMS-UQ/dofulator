@@ -11,6 +11,7 @@
 #define DEG (PI/180.0)
 
 #define DBLS (double*)(double[])
+#define ntests(testset) (sizeof(testset)/sizeof(*testset))
 
 inline static bool feql(double a, double b) {
   return fabs(a - b) < 100*DBL_EPSILON;

@@ -50,16 +50,69 @@ void fragment_destroy(Fragment fragment) {
  * Treats all bonds as fixed length with flexible angles, and assumes all atoms
  * are connected in a single graph.
  *
+ * Bond list will be sanitized (mutated)
+ *
  * WARNING: Currently cannot handle rings - only tree topology!
  *
 */
 Fragment fragment_create_semirigid(AtomList atoms, BondList bonds) {
+  assert(bonds.n > 0);
+
+  // Make sure there are no loops, assuming all atoms connected
+  assert(atoms.n - bonds.n == 1);
+
+  // Make sure bonds are sorted, and bond.i < bond.j
+  sanitize_bonds(bonds);
+
   // Maximum possible number of modes
   unsigned max_modes = 3*atoms.n;
   Fragment_t* frag = fragment_alloc(atoms, max_modes);
   if (!frag) return NULL;
 
-  return (Fragment)frag;
+  frag->nmodes = max_modes;
+
+  double (*mC)[3*atoms.n][max_modes] = (double(*)[3*atoms.n][max_modes])frag->mC;
+  Vec3 rij;
+
+  // Add atoms breadth-first so that rows can be copied as new atoms are encountered
+  unsigned base = bonds.bonds[0].i;
+  (*mC)[3*base][3*base] = 1.0;
+  (*mC)[3*base+1][3*base+1] = 1.0;
+  (*mC)[3*base+2][3*base+2] = 1.0;
+  for (unsigned b = 0; b < bonds.n; ++b) {
+    const unsigned i = bonds.bonds[b].i;
+    const unsigned j = bonds.bonds[b].j;
+    rij = vec_sub(&atoms.pos[3*j], &atoms.pos[3*i]);
+
+    // Copy rows from i to get previous connectivity
+    memcpy((*mC)[3*j], (*mC)[3*i], sizeof(double)*3*max_modes);
+
+    /* Store negative cross operator matrix
+     *  0   z   -y
+     * -z   0    x
+     *  y  -x    0
+     */
+    (*mC)[3*j][3*j+1] = rij.z;
+    (*mC)[3*j][3*j+2] = -rij.y;
+
+    (*mC)[3*j+1][3*j] = -rij.z;
+    (*mC)[3*j+1][3*j+2] = rij.x;
+
+    (*mC)[3*j+2][3*j] = rij.y;
+    (*mC)[3*j+2][3*j+1] = -rij.x;
+  }
+
+  // Apply mass scaling
+  for (unsigned i = 0; i < atoms.n; ++i) {
+    const double root_m = sqrt(atoms.mass[i]);
+    for (unsigned d = 0; d < 3; ++d) {
+      for (unsigned m = 0; m < max_modes; ++m) {
+       (*mC)[3*i+d][m] *= root_m;
+      }
+    }
+  }
+
+  return (Fragment)fragment_eval(frag);
 }
 
 
@@ -131,13 +184,10 @@ Fragment_t* fragment_eval(Fragment_t* frag) {
     return NULL;
   }
 
-  // Calculate modal inertias:
-  // I_mode = R^T C^T M C R
-  //        = R_mode^T lambda_mode R_mode
-  //        = lambda_mode R_mode dot R_mode
-  for (unsigned m = 0; m < modes; ++m) {
-    frag->Imodal[m] *= cblas_ddot(modes, &frag->R[m], modes, &frag->R[m], modes);
-  }
+  // Modal inertia = R^T C^T M C R
+  // For mode m:
+  //           I_m = lambda_m R_m^T R_m
+  //               = lambda_m
 
   // Store the full transform M^1/2 C R for later to get per-atom modal inertia
   cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, 3*n, modes, modes,
@@ -214,4 +264,42 @@ double fragment_dof_atom_dir(Fragment fragment, unsigned atom, double dir[3]) {
     }
   }
   return dof;
+}
+
+
+/* =============================================================================
+ *
+ * Comparison routine for sorting bond list.
+ *
+*/
+static int cmp_bonds(const void* lhs, const void* rhs) {
+  Bond* l = (Bond*)lhs;
+  Bond* r = (Bond*)rhs;
+  int di = l->i - r->i;
+  if (di) return l->j - r->j;
+  return di;
+}
+
+
+/* =============================================================================
+ *
+ * Sanitize the bond list so that i < j and lowest i comes first.
+ *
+*/
+static inline void sanitize_bonds(BondList bonds) {
+  // Swap so that i < j
+  for (unsigned b = 0; b < bonds.n; ++b) {
+    assert(bonds.bonds[b].i != bonds.bonds[b].j);
+    if (bonds.bonds[b].j < bonds.bonds[b].i) {
+      unsigned tmp = bonds.bonds[b].i;
+      bonds.bonds[b].i = bonds.bonds[b].j;
+      bonds.bonds[b].j = tmp;
+    }
+  }
+
+  qsort(bonds.bonds, bonds.n, sizeof(Bond), cmp_bonds);
+
+  for (unsigned b = 1; b < bonds.n; ++b) {
+    assert(memcmp(&bonds.bonds[b], &bonds.bonds[b-1], sizeof(Bond)));
+  }
 }

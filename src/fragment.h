@@ -26,4 +26,7 @@ Fragment_t* fragment_eval(Fragment_t* frag);
 
 static inline Fragment_t* fragment_alloc(AtomList atoms, unsigned max_modes);
 
+static int cmp_bonds(const void* lhs, const void* rhs);
+static inline void sanitize_bonds(BondList bonds);
+
 #endif
