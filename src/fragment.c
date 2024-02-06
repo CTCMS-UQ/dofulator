@@ -283,7 +283,7 @@ static int cmp_bonds(const void* lhs, const void* rhs) {
 
 /* =============================================================================
  *
- * Sanitize the bond list so that i < j and lowest i comes first.
+ * Sanitize the bond list so that i < j and list is sorted by i, then j
  *
 */
 static inline void sanitize_bonds(BondList bonds) {
