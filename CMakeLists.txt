@@ -36,24 +36,5 @@ target_link_libraries(dof PRIVATE dofulator m)
 
 if (ENABLE_TESTING)
   include(CTest)
-
-  file(GLOB UNIT_TEST_SRCS ${PROJECT_SOURCE_DIR}/tests/unit/*.c)
-  file(GLOB UNIT_LIB_SRCS ${PROJECT_SOURCE_DIR}/tests/unit/unit_test.c)
-  list(REMOVE_ITEM UNIT_TEST_SRCS ${UNIT_LIB_SRCS})
-
-  add_library(unittest SHARED ${UNIT_LIB_SRCS})
-  target_link_libraries(unittest PRIVATE dofulator m)
-  target_include_directories(unittest PUBLIC ${INCLUDE_DIRS})
-  target_compile_options(unittest PUBLIC "-Wall;-Wextra;-Wpedantic")
-  if (TEST_ASAN)
-    target_link_libraries(unittest PUBLIC -fsanitize=address)
-  endif()
-
-  foreach(TEST_NAME IN ITEMS ${UNIT_TEST_SRCS})
-    get_filename_component(TEST_BASENAME ${TEST_NAME} NAME_WLE)
-    add_executable(${TEST_BASENAME} ${TEST_NAME})
-    target_link_libraries(${TEST_BASENAME} PRIVATE unittest)
-    add_test(NAME ${TEST_BASENAME} COMMAND ${TEST_BASENAME})
-  endforeach()
-
+  add_subdirectory(tests)
 endif()
