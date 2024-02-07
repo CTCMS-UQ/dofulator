@@ -1,0 +1,7 @@
+2
+# H2 dimer, with out of order atoms and some comments
+2 H 1.008 -0.5 0 0 # First H atom
+1 H 1.008 0.5 0 0
+
+1
+2 1 # H-H bond. Out of order for test purposes

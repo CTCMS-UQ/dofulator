@@ -198,7 +198,7 @@ Fragment_t* fragment_eval(Fragment_t* frag) {
 
 /* =============================================================================
  *
- * Calculate the DoF of atom with index `atom`
+ * Calculate the total DoF of the fragment
  *
 */
 double fragment_dof(const Fragment fragment) {
@@ -243,7 +243,7 @@ double fragment_dof_atom(const Fragment fragment, unsigned atom) {
  * `dir` must be a unit vector.
  *
 */
-double fragment_dof_atom_dir(Fragment fragment, unsigned atom, double dir[3]) {
+double fragment_dof_atom_dir(Fragment fragment, unsigned atom, const double dir[3]) {
   assert(fabs(dir[0]*dir[0] + dir[1]*dir[1] + dir[2]*dir[2] - 1.0) < 100*DBL_EPSILON);
   const Fragment_t* frag = (const Fragment_t*)fragment;
   double dof = 0.0;
