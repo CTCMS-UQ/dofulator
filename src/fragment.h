@@ -1,7 +1,8 @@
 #ifndef FRAGMENT_H
 #define FRAGMENT_H
 
-#include "dofulator.h"
+#include "atom_list.h"
+#include "bond_list.h"
 
 typedef struct Fragment_t {
   unsigned natoms;  // Number of atoms in the fragment
@@ -27,5 +28,7 @@ Fragment_t* fragment_eval(Fragment_t* frag);
 static inline Fragment_t* fragment_alloc(AtomList atoms, unsigned max_modes);
 
 static inline void sanitize_bonds(BondList bonds);
+
+inline static void vec_sub(const double l[3], const double r[3], double out[3]);
 
 #endif

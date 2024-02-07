@@ -2,12 +2,12 @@
 #include <float.h>
 #include <math.h>
 #include <stdlib.h>
-#include <openblas/cblas.h>
-#include <openblas/lapacke.h>
 #include <string.h>
 
+#include "cblas_lapacke.h"
+
 #include "fragment.h"
-#include "vec3.h"
+#include "dofulator.h"
 
 /* =============================================================================
  *
@@ -72,7 +72,7 @@ Fragment fragment_create_semirigid(AtomList atoms, BondList bonds) {
   frag->nmodes = max_modes;
 
   double (*mC)[3*atoms.n][max_modes] = (double(*)[3*atoms.n][max_modes])frag->mC;
-  Vec3 rij;
+  double rij[3];
 
   // Add atoms breadth-first so that rows can be copied as new atoms are encountered
   unsigned base = bonds.bonds[0].i;
@@ -82,7 +82,7 @@ Fragment fragment_create_semirigid(AtomList atoms, BondList bonds) {
   for (unsigned b = 0; b < bonds.n; ++b) {
     const unsigned i = bonds.bonds[b].i;
     const unsigned j = bonds.bonds[b].j;
-    rij = vec_sub(&atoms.pos[3*j], &atoms.pos[3*i]);
+    vec_sub(&atoms.pos[3*j], &atoms.pos[3*i], rij);
 
     // Copy rows from i to get previous connectivity
     memcpy((*mC)[3*j], (*mC)[3*i], sizeof(double)*3*max_modes);
@@ -92,14 +92,14 @@ Fragment fragment_create_semirigid(AtomList atoms, BondList bonds) {
      * -z   0    x
      *  y  -x    0
      */
-    (*mC)[3*j][3*j+1] = rij.z;
-    (*mC)[3*j][3*j+2] = -rij.y;
+    (*mC)[3*j][3*j+1] = rij[2];
+    (*mC)[3*j][3*j+2] = -rij[1];
 
-    (*mC)[3*j+1][3*j] = -rij.z;
-    (*mC)[3*j+1][3*j+2] = rij.x;
+    (*mC)[3*j+1][3*j] = -rij[2];
+    (*mC)[3*j+1][3*j+2] = rij[0];
 
-    (*mC)[3*j+2][3*j] = rij.y;
-    (*mC)[3*j+2][3*j+1] = -rij.x;
+    (*mC)[3*j+2][3*j] = rij[1];
+    (*mC)[3*j+2][3*j+1] = -rij[0];
   }
 
   // Apply mass scaling
@@ -131,26 +131,26 @@ Fragment fragment_create_rigid(AtomList atoms) {
   frag->nmodes = max_modes;
 
   double (*mC)[3*atoms.n][max_modes] = (double(*)[3*atoms.n][max_modes])frag->mC;
-  Vec3 rij;
+  double rij[3];
   (*mC)[0][0] = (*mC)[1][1] = (*mC)[2][2] = sqrt(atoms.mass[0]);
   for (unsigned i = 1; i < atoms.n; ++i) {
     const double root_m = sqrt(atoms.mass[i]);
     (*mC)[3*i][0] = (*mC)[3*i+1][1] = (*mC)[3*i+2][2] = root_m;
-    rij = vec_sub(&atoms.pos[3*i], &atoms.pos[0]);
+    vec_sub(&atoms.pos[3*i], &atoms.pos[0], rij);
 
     /* Store negative cross operator matrix
      *  0   z   -y
      * -z   0    x
      *  y  -x    0
      */
-    (*mC)[3*i][4] = root_m * rij.z;
-    (*mC)[3*i][5] = -root_m * rij.y;
+    (*mC)[3*i][4] = root_m * rij[2];
+    (*mC)[3*i][5] = -root_m * rij[1];
 
-    (*mC)[3*i+1][3] = -root_m * rij.z;
-    (*mC)[3*i+1][5] = root_m * rij.x;
+    (*mC)[3*i+1][3] = -root_m * rij[2];
+    (*mC)[3*i+1][5] = root_m * rij[0];
 
-    (*mC)[3*i+2][3] = root_m * rij.y;
-    (*mC)[3*i+2][4] = -root_m * rij.x;
+    (*mC)[3*i+2][3] = root_m * rij[1];
+    (*mC)[3*i+2][4] = -root_m * rij[0];
   }
 
 
@@ -302,4 +302,16 @@ static inline void sanitize_bonds(BondList bonds) {
   for (unsigned b = 1; b < bonds.n; ++b) {
     assert(memcmp(&bonds.bonds[b], &bonds.bonds[b-1], sizeof(Bond)));
   }
+}
+
+
+/* =============================================================================
+ *
+ * Calculate `l` - `r` and store in `out`
+ *
+*/
+inline static void vec_sub(const double l[3], const double r[3], double out[3]) {
+  out[0] = l[0] - r[0];
+  out[1] = l[1] - r[1];
+  out[2] = l[2] - r[2];
 }
