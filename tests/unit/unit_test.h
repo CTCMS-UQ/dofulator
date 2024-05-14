@@ -15,7 +15,7 @@
 #define ntests(testset) (sizeof(testset)/sizeof(*testset))
 
 inline static bool feql(double a, double b) {
-  return fabs(a - b) < 100*DBL_EPSILON;
+  return fabs(a - b) < 100.*FLT_EPSILON;
 }
 
 typedef struct AtomList {
@@ -43,7 +43,7 @@ typedef struct TestSet {
   Test* tests;
 } TestSet;
 
-bool run_test(const Test* test);
-int run_testset(const TestSet testset);
+bool run_test(Test* test);
+int run_testset(TestSet testset);
 
 #endif

@@ -681,14 +681,19 @@ Quaternion frame_get_rotation(const RefFrame* frame, const double (*x)[3]) {
   vec_cross(frame->r12, b, c);
   vec_normalize(c);
 
-  // Get rotation around r12 axis such that c aligns with r13_perp == r12 cross r13
+  // Get rotation around r12 axis such that c aligns with r13_perp == r12 x r13.
+  // frame->r12 and r13_perp are normalized.
   Quaternion qb = quat_from_vec(frame->r12);
   double cos_angle = vec_dot(c, frame->r13_perp);
-  double sin_angle = sqrt(1 - cos_angle*cos_angle);
-  qb.x *= sin_angle;
-  qb.y *= sin_angle;
-  qb.z *= sin_angle;
-  qb.w = cos_angle;
+  if (fabs(1. + cos_angle) > 100.*DBL_EPSILON) {
+    // Need non-zero axis if w is zero or normalizing gives NaN
+    double sin_angle = sqrt(1 - cos_angle*cos_angle);
+    qb.x *= sin_angle;
+    qb.y *= sin_angle;
+    qb.z *= sin_angle;
+  }
+  qb.w = 1. + cos_angle;
+  qb = quat_normalize(qb);
 
   return quat_mul(qb, qa);
 }
@@ -984,17 +989,23 @@ void dofulator_get_dof_atom_directional(const struct Dofulator* ctx, AtomTag ato
     frag = &ctx->semirigid_frags.fragments[frag_idx.idx];
   }
   const size_t i = ctx->atom_frag_idx[atom_idx];
-  dof[0] = frag->dof_total[3*i];
-  dof[1] = frag->dof_total[3*i+1];
-  dof[2] = frag->dof_total[3*i+2];
-
-  // Rotate into current frame for rigid fragments
   if (frag_idx.rigid) {
-    quat_rotate_vec(ctx->rigid_ref_frames[frag_idx.idx].current_rot, dof);
-    dof[0] = fabs(dof[0]);
-    dof[1] = fabs(dof[1]);
-    dof[2] = fabs(dof[2]);
+    // Rotate into current frame for rigid fragments
+    double x[3] = {1., 0., 0.};
+    double y[3] = {0., 1., 0.};
+    double z[3] = {0., 0., 1.};
+    quat_rotate_vec(ctx->rigid_ref_frames[frag_idx.idx].current_rot, x);
+    quat_rotate_vec(ctx->rigid_ref_frames[frag_idx.idx].current_rot, y);
+    quat_rotate_vec(ctx->rigid_ref_frames[frag_idx.idx].current_rot, z);
+    dof[0] = frag->dof_total[3*i]*x[0]*x[0] + frag->dof_total[3*i+1]*y[0]*y[0] + frag->dof_total[3*i+2]*z[0]*z[0];
+    dof[1] = frag->dof_total[3*i]*x[1]*x[1] + frag->dof_total[3*i+1]*y[1]*y[1] + frag->dof_total[3*i+2]*z[1]*z[1];
+    dof[2] = frag->dof_total[3*i]*x[2]*x[2] + frag->dof_total[3*i+1]*y[2]*y[2] + frag->dof_total[3*i+2]*z[2]*z[2];
+  } else {
+    dof[0] = frag->dof_total[3*i];
+    dof[1] = frag->dof_total[3*i+1];
+    dof[2] = frag->dof_total[3*i+2];
   }
+
 }
 
 // Get the total DoF of the atom with index `atom_idx`
