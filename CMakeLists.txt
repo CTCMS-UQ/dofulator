@@ -18,7 +18,6 @@ set(DOF_LIBRARY_ONLY OFF CACHE BOOL "Only build the library")
 
 set(SRC_DIR ${PROJECT_SOURCE_DIR}/src)
 set(INCLUDE_DIRS ${INCLUDE_DIRECTORIES} ${SRC_DIR})
-# file(GLOB LIB_SRCS ${SRC_DIR}/*.c)
 file(GLOB LIB_SRCS ${SRC_DIR}/dofulator.c)
 file(GLOB EXE_SRCS ${SRC_DIR}/frontend/*.c)
 
@@ -29,7 +28,6 @@ target_include_directories(dofulator PRIVATE ${INCLUDE_DIRS})
 target_compile_options(dofulator PRIVATE "-Wall;-Wextra;-Wpedantic")
 
 install(TARGETS dofulator EXPORT dofulator_Targets DESTINATION lib)
-# install(FILES ${SRC_DIR}/dofulator.h ${SRC_DIR}/atom_list.h ${SRC_DIR}/bond_list.h DESTINATION include)
 install(FILES ${SRC_DIR}/dofulator.h DESTINATION include)
 
 # Set up cblas and lapacke includes
