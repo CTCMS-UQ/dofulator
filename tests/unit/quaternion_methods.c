@@ -15,8 +15,12 @@ int main(void) {
   result &= feql(a[0], b[0]);
   result &= feql(a[1], b[1]);
   result &= feql(a[2], b[2]);
-  if (result) printf("Passed\n");
-  else printf("FAILED\n");
+  if (result) {
+    printf("Passed\n");
+  } else {
+    printf("FAILED\n");
+    return EXIT_FAILURE;
+  }
 
   printf("Checking double rotation \t\t\t... ");
   a[0] = 1.; a[1] = a[2] = 0.;
@@ -28,8 +32,12 @@ int main(void) {
   result &= feql(a[0], b[0]);
   result &= feql(a[1], b[1]);
   result &= feql(a[2], b[2]);
-  if (result) printf("Passed\n");
-  else printf("FAILED\n");
+  if (result) {
+    printf("Passed\n");
+  } else {
+    printf("FAILED\n");
+    return EXIT_FAILURE;
+  }
 
   printf("Checking 6x rotation \t\t\t\t... ");
   a[0] = 1.; a[1] = a[2] = 0.;
@@ -46,8 +54,12 @@ int main(void) {
   result &= feql(a[0], b[0]);
   result &= feql(a[1], b[1]);
   result &= feql(a[2], b[2]);
-  if (result) printf("Passed\n");
-  else printf("FAILED\n");
+  if (result) {
+    printf("Passed\n");
+  } else {
+    printf("FAILED\n");
+    return EXIT_FAILURE;
+  }
 
   printf("Checking quat_from_closest_arc, simple case\t... ");
   a[0] = a[1] = a[2] = 1.0;
@@ -59,8 +71,12 @@ int main(void) {
   result &= feql(a[2], 0.);
   result &= feql(a[0], a[1]);
   result &= feql(vec_dot(a, a), 3.);
-  if (result) printf("Passed\n");
-  else printf("FAILED\n");
+  if (result) {
+    printf("Passed\n");
+  } else {
+    printf("FAILED\n");
+    return EXIT_FAILURE;
+  }
 
   printf("Checking quat_from_closest_arc, 180 deg\t\t... ");
   a[0] = -1.;
@@ -74,8 +90,12 @@ int main(void) {
   result &= feql(vec_dot(a, a), 2.);
   result &= feql(a[0] / sqrt(2.), b[0]);
   result &= feql(a[1] / sqrt(2.), b[1]);
-  if (result) printf("Passed\n");
-  else printf("FAILED\n");
+  if (result) {
+    printf("Passed\n");
+  } else {
+    printf("FAILED\n");
+    return EXIT_FAILURE;
+  }
 
   printf("Checking compound rotation\t\t\t... ");
   a[0] = 0.;
@@ -121,8 +141,12 @@ int main(void) {
   result &= feql(bb[0], b[0]);
   result &= feql(bb[1], b[1]);
   result &= feql(bb[2], b[2]);
-  if (result) printf("Passed\n");
-  else printf("FAILED\n");
+  if (result) {
+    printf("Passed\n");
+  } else {
+    printf("FAILED\n");
+    return EXIT_FAILURE;
+  }
 
   return EXIT_SUCCESS;
 }
