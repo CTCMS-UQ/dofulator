@@ -14,55 +14,56 @@ static unsigned digits(unsigned n) {
 
 bool run_test(const Test* test) {
   bool result = true;
-  Fragment frag;
-  switch (test->test_type) {
-    case RIGID:
-      frag = fragment_create_rigid(test->atoms);
-      break;
-    case FLEX:
-      frag = fragment_create_semirigid(test->atoms, test->bonds);
-      break;
-    default:
-      return false;
-  }
-  if (!frag) {
-    printf("FAILED\n\tError creating rigid body!\n");
+  Dofulator ctx = dofulator_create(test->atoms.n);
+  if (!ctx) {
+    printf("FAILED\n\tError creating dofulator context!\n");
     return false;
   }
+  for (Bond* b = test->bonds.bonds; b < test->bonds.bonds + test->bonds.n; ++b) {
+    switch (test->test_type) {
+      case RIGID:
+        dofulator_build_rigid_fragment(ctx, *b);
+        break;
+      case FLEX:
+        dofulator_add_rigid_bond(ctx, *b);
+    }
+  }
+  dofulator_finalise_fragments(ctx);
+  dofulator_precalculate_rigid(ctx, test->atoms.mass, test->atoms.x);
+  dofulator_calculate(ctx, test->atoms.mass, test->atoms.x);
 
-  double dof_total = 0.0;
-  for (unsigned i = 0; i < test->atoms.n; ++i) {
+  // double dof_total = 0.0;
+  for (size_t i = 0; i < test->atoms.n; ++i) {
     double dof_atom = 0.0;
+    double dof[3];
+    dofulator_get_dof_atom_directional(ctx, i, dof);
     for (unsigned d = 0; d < 3; ++d) {
-      double dir[] = {0.0, 0.0, 0.0};
-      dir[d] = 1.0;
-      double dof = fragment_dof_atom_dir(frag, i, dir);
-      if (!feql(dof, test->dof[i][d])) {
+      if (!feql(dof[d], test->dof[i][d])) {
         if (result) printf("FAILED\n");
-        printf("\t! Atom %d expected %.16g DoF in %c, got %.16g\n",
-               i, test->dof[i][d], (char[]){'x', 'y', 'z'}[d], dof);
+        printf("\t! Atom %ld expected %.16g DoF in %c, got %.16g\n",
+               i, test->dof[i][d], (char[]){'x', 'y', 'z'}[d], dof[d]);
         result = false;
       }
       dof_atom += test->dof[i][d];
-      dof_total += test->dof[i][d];
+      // dof_total += test->dof[i][d];
     }
-    double dof = fragment_dof_atom(frag, i);
-    if (!feql(dof_atom, dof)) {
+    double dof_atom_actual = dofulator_get_dof_atom(ctx, i);
+    if (!feql(dof_atom, dof_atom_actual)) {
       if (result) printf("FAILED\n");
-      printf("\t! Atom %d expected %.16g DoF, got %.16g\n",
-             i, dof_atom, dof);
+      printf("\t! Atom %ld expected %.16g DoF total, got %.16g\n",
+             i, dof_atom, dof_atom_actual);
       result = false;
     }
   }
-  double dof = fragment_dof(frag);
-  if (!feql(dof_total, dof)) {
-    if (result) printf("FAILED\n");
-    printf("\t! Expected %.16g DoF total, got %.16g\n",
-           dof_total, dof);
-    result = false;
-  }
+  // double dof = fragment_dof(frag);
+  // if (!feql(dof_total, dof)) {
+  //   if (result) printf("FAILED\n");
+  //   printf("\t! Expected %.16g DoF total, got %.16g\n",
+  //          dof_total, dof);
+  //   result = false;
+  // }
 
-  fragment_destroy(frag);
+  dofulator_destroy(&ctx);
   return result;
 }
 

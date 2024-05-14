@@ -2,13 +2,13 @@
 #include "unit_test.h"
 
 int main(void) {
-  Test complex_rigid[] = {
+  Test basic_flexible[] = {
     { .name = "H2",
       .test_type = FLEX,
       .atoms = {
-        .n = 2,
+        .n = 2l,
         .mass = DBLS{1.008, 1.008},
-        .pos = DBLS{
+        .x = DBLSX{
           0.0, 0.0, 0.0,
           1.0, 0.0, 0.0,
         },
@@ -30,7 +30,7 @@ int main(void) {
       .atoms = {
         .n = 3,
         .mass = DBLS{15.999, 1.008, 1.008},
-        .pos = DBLS{
+        .x = DBLSX{
           0.0, 0.0, 0.0,
           1.0, 0.0, 0.0,
           0.0, 1.0, 0.0,
@@ -55,7 +55,7 @@ int main(void) {
       .atoms = {
         .n = 3,
         .mass = DBLS{15.999, 1.008, 1.008},
-        .pos = DBLS{
+        .x = DBLSX{
           0.0, 0.0, 0.0,
           1.0, 0.0, 0.0,
           -1.0, 0.0, 0.0,
@@ -80,7 +80,7 @@ int main(void) {
       .atoms = {
         .n = 3,
         .mass = DBLS{1.008, 15.999, 1.008},
-        .pos = DBLS{
+        .x = DBLSX{
           1.0, 0.0, 0.0,
           0.0, 0.0, 0.0,
           0.0, 1.0, 0.0,
@@ -105,7 +105,7 @@ int main(void) {
       .atoms = {
         .n = 3,
         .mass = DBLS{15.999, 1.008, 1.008},
-        .pos = DBLS{
+        .x = DBLSX{
           0.0, 0.0, 0.0,
           1.0, 0.0, 0.0,
           -1.0, 0.0, 0.0,
@@ -127,8 +127,8 @@ int main(void) {
   };
 
   return run_testset((TestSet){
-      .name = "Complex Rigid",
-      .tests = complex_rigid,
-      .n = ntests(complex_rigid),
+      .name = "Basic Flexible",
+      .tests = basic_flexible,
+      .n = ntests(basic_flexible),
     });
 }

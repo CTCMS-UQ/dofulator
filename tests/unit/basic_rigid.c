@@ -7,7 +7,7 @@ int main(void) {
       .atoms = {
         .n = 1,
         .mass = DBLS{1.0},
-        .pos =  DBLS{0.0, 0.0, 0.0},
+        .x =  DBLSX{0.0, 0.0, 0.0},
       },
       .dof = (double[][3]){
         {1.0, 1.0, 1.0},
@@ -19,7 +19,7 @@ int main(void) {
       .atoms = {
         .n = 1,
         .mass = DBLS{1.0},
-        .pos =  DBLS{1.0, 3.0, -2.0},
+        .x =  DBLSX{1.0, 3.0, -2.0},
       },
       .dof = (double[][3]){
         {1.0, 1.0, 1.0},
@@ -31,9 +31,15 @@ int main(void) {
       .atoms = {
         .n = 2,
         .mass = DBLS{1.0, 1.0},
-        .pos =  DBLS{
+        .x =  DBLSX{
           0.0, 0.0, 0.0,
           1.0, 0.0, 0.0
+        },
+      },
+      .bonds = {
+        .n = 1,
+        .bonds = (Bond[]){
+          {0, 1},
         },
       },
       .dof = (double[][3]){
@@ -47,9 +53,15 @@ int main(void) {
       .atoms = {
         .n = 2,
         .mass = DBLS{1.0, 1.0},
-        .pos =  DBLS{
+        .x =  DBLSX{
           0.0, 0.0, 0.0,
           0.0, 1.0, 0.0
+        },
+      },
+      .bonds = {
+        .n = 1,
+        .bonds = (Bond[]){
+          {0, 1},
         },
       },
       .dof = (double[][3]){
@@ -63,9 +75,15 @@ int main(void) {
       .atoms = {
         .n = 2,
         .mass = DBLS{1.0, 1.0},
-        .pos =  DBLS{
+        .x =  DBLSX{
           0.0, 0.0, 0.0,
           0.0, 0.0, 1.0
+        },
+      },
+      .bonds = {
+        .n = 1,
+        .bonds = (Bond[]){
+          {0, 1},
         },
       },
       .dof = (double[][3]){
@@ -79,7 +97,7 @@ int main(void) {
       .atoms = {
         .n = 8,
         .mass = DBLS{1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0},
-        .pos =  DBLS{
+        .x =  DBLSX{
           0.0, 0.0, 0.0,
           1.0, 0.0, 0.0,
           0.0, 1.0, 0.0,
@@ -88,6 +106,23 @@ int main(void) {
           1.0, 0.0, 1.0,
           0.0, 1.0, 1.0,
           1.0, 1.0, 1.0,
+        },
+      },
+      .bonds = {
+        .n = 12,
+        .bonds = (Bond[]){
+          {0, 1},
+          {1, 2},
+          {2, 3},
+          {3, 0},
+          {0, 4},
+          {4, 5},
+          {5, 6},
+          {6, 7},
+          {7, 4},
+          {1, 5},
+          {2, 6},
+          {3, 7},
         },
       },
       .dof = (double[][3]){

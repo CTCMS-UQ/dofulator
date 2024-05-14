@@ -79,9 +79,9 @@ Molecule parse_molecule_file(char* fname) {
     }
     idx_tot += idx;
     --idx;  // Switch from 1-based to 0-based indexing
-    out.atoms.pos[3*idx] = x;
-    out.atoms.pos[3*idx+1] = y;
-    out.atoms.pos[3*idx+2] = z;
+    out.atoms.x[idx][0] = x;
+    out.atoms.x[idx][1] = y;
+    out.atoms.x[idx][2] = z;
     out.atoms.mass[idx] = mass;
     memcpy(out.atom_labels[idx], label, sizeof(label));
 
@@ -140,7 +140,7 @@ Molecule parse_molecule_file(char* fname) {
       goto error;
     }
     // Switch from 1-based to 0-based indexing
-    out.bonds.bonds[b] = (Bond){.i = i-1, .j = j-1};
+    out.bonds.bonds[b] = (Bond){.ai = i-1, .aj = j-1};
     int eof_check = skip_to_eol(fid);
     if (b+1 < out.bonds.n && eof_check == EOF) {
       if (feof(fid)) {

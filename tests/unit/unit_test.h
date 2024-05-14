@@ -11,11 +11,23 @@
 #define DEG (PI/180.0)
 
 #define DBLS (double*)(double[])
+#define DBLSX (double(*)[3])(double[])
 #define ntests(testset) (sizeof(testset)/sizeof(*testset))
 
 inline static bool feql(double a, double b) {
   return fabs(a - b) < 100*DBL_EPSILON;
 }
+
+typedef struct AtomList {
+  size_t n;
+  double (*x)[3];
+  double* mass;
+} AtomList;
+
+typedef struct BondList {
+  size_t n;
+  Bond* bonds;
+} BondList;
 
 typedef struct Test {
   enum {RIGID, FLEX} test_type;

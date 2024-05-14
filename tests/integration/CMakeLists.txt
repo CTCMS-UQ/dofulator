@@ -8,7 +8,7 @@ foreach(XYZ IN ITEMS ${INT_TEST_INPUT})
   set(INT_TEST_OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${INT_TEST}.dof)
   # TODO: Make this platform independent
   add_test(
-    NAME ${XYZ}
+    NAME integration::${INT_TEST}
     COMMAND bash -c "${CMAKE_BINARY_DIR}/dof ${XYZ} -o ${INT_TEST_OUTPUT} && diff ${INT_TEST_REF} ${INT_TEST_OUTPUT}"
   )
 

@@ -9,9 +9,9 @@ extern "C" {
  * A list of point masses
 */
 typedef struct AtomList {
-  unsigned n;   // Number of atoms
-  double *pos;  // Positions of each atom, formatted as x0,y0,z0,x1,y1,z1,...
-  double *mass; // Masses of each atom
+  unsigned n;      // Number of atoms
+  double (*x)[3];  // Positions of each atom
+  double *mass;    // Masses of each atom
 } AtomList;
 
 /*

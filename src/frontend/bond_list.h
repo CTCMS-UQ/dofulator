@@ -1,17 +1,11 @@
 #ifndef DOF_BOND_LIST_H
 #define DOF_BOND_LIST_H
 
+#include "dofulator.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/*
- * A bond between atoms with indices i and j
-*/
-typedef struct Bond {
-  unsigned i;
-  unsigned j;
-} Bond;
 
 /*
  * List of bonds
