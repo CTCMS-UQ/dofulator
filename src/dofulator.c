@@ -659,7 +659,7 @@ void fragment_solve_dof(Dofulator ctx, Fragment* frag, double* mJ, double* Q) {
 
 // Get a normalized quaternion representing the rotation needed to bring the fragment
 // from its original orientation to the current one
-Quaternion frame_get_rotation(const RefFrame* frame, const double (*x)[3]) {
+Quaternion frame_get_rotation(const RefFrame* frame, const double x[][3]) {
   if (frame->ref_atom1 == frame->ref_atom2) {
     return quat_identity();
   }
@@ -700,7 +700,7 @@ Quaternion frame_get_rotation(const RefFrame* frame, const double (*x)[3]) {
 
 // Find reference atoms in the fragment and store them in `frame` along with the
 // relevant unit vectors which define the reference orientation
-void fragment_set_frame(const Fragment* frag, RefFrame* frame, const double (*x)[3]) {
+void fragment_set_frame(const Fragment* frag, RefFrame* frame, const double x[][3]) {
   if (frag->n_atoms == 0) { return; }
 
   AtomTag iatom = 0;
@@ -756,7 +756,7 @@ void fragment_set_frame(const Fragment* frag, RefFrame* frame, const double (*x)
 
 // Pre-calculate modal, directional DoF of rigid fragments, since these can just be rotated
 // with the fragment rather than re-calculating each time
-void dofulator_precalculate_rigid(Dofulator ctx, const double* mass, const double (*x)[3]) {
+void dofulator_precalculate_rigid(Dofulator ctx, const double* mass, const double x[][3]) {
   assert(ctx);
   ctx->rigid_ref_frames = realloc(ctx->rigid_ref_frames, sizeof(RefFrame) * ctx->rigid_frags.n_fragments);
   // TODO: better error handling
@@ -812,7 +812,7 @@ void dofulator_precalculate_rigid(Dofulator ctx, const double* mass, const doubl
 }
 
 // Calculate rotation quaternion for each rigid fragment.
-void dofulator_calculate_rigid(Dofulator ctx, const double (*x)[3]) {
+void dofulator_calculate_rigid(Dofulator ctx, const double x[][3]) {
   for (size_t ifrag = 0; ifrag < ctx->rigid_frags.n_fragments; ++ifrag) {
     ctx->rigid_ref_frames[ifrag].current_rot = frame_get_rotation(&ctx->rigid_ref_frames[ifrag], x);
   }
@@ -820,7 +820,7 @@ void dofulator_calculate_rigid(Dofulator ctx, const double (*x)[3]) {
 
 // Calculate dof_total and dof for all semirigid fragments based on given masses
 // and atom locations (indexed by atom index)
-void dofulator_calculate_semirigid(Dofulator ctx, const double* mass, const double (*x)[3]) {
+void dofulator_calculate_semirigid(Dofulator ctx, const double* mass, const double x[][3]) {
   for (
     size_t ifrag = 0, *n_frags = ctx->n_semirigid;
     n_frags < ctx->n_semirigid + ctx->max_semirigid_atoms;
@@ -969,7 +969,7 @@ void dofulator_calculate_semirigid(Dofulator ctx, const double* mass, const doub
 }
 
 // Calculate DoF of all fragments in the context
-void dofulator_calculate(Dofulator ctx, const double* mass, const double (*x)[3]) {
+void dofulator_calculate(Dofulator ctx, const double* mass, const double x[][3]) {
   dofulator_calculate_rigid(ctx, x);
   dofulator_calculate_semirigid(ctx, mass, x);
 }

@@ -37,8 +37,8 @@ void dofulator_destroy(Dofulator* ctx);
 void dofulator_add_rigid_bond(Dofulator ctx, Bond b);
 void dofulator_build_rigid_fragment(Dofulator ctx, Bond b);
 void dofulator_finalise_fragments(Dofulator ctx);
-void dofulator_precalculate_rigid(Dofulator ctx, const double* mass, const double (*x)[3]);
-void dofulator_calculate(Dofulator ctx, const double* mass, const double (*x)[3]);
+void dofulator_precalculate_rigid(Dofulator ctx, const double* mass, const double x[][3]);
+void dofulator_calculate(Dofulator ctx, const double* mass, const double x[][3]);
 void dofulator_get_dof_atom_directional(const struct Dofulator* ctx, AtomTag atom_idx, double dof[3]);
 double dofulator_get_dof_atom(const struct Dofulator* ctx, AtomTag atom_idx);
 

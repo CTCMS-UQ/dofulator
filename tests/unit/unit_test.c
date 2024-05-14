@@ -75,28 +75,28 @@ bool run_test(Test* test) {
     }
   }
   dofulator_finalise_fragments(ctx);
-  dofulator_precalculate_rigid(ctx, test->atoms.mass, test->atoms.x);
+  dofulator_precalculate_rigid(ctx, test->atoms.mass, (const double(*)[3])test->atoms.x);
 
-  dofulator_calculate(ctx, test->atoms.mass, test->atoms.x);
+  dofulator_calculate(ctx, test->atoms.mass, (const double(*)[3])test->atoms.x);
   result &= check_result(ctx, test, result);
 
   // Check for rotational invariance
   double angle = 90. * DEG;
   Quaternion q = {.x = sin(angle/2.), .y = 0, .z = 0, .w = cos(angle/2.)};
   rotate_system(q, test);
-  dofulator_calculate(ctx, test->atoms.mass, test->atoms.x);
+  dofulator_calculate(ctx, test->atoms.mass, (const double(*)[3])test->atoms.x);
   result &= check_result(ctx, test, result);
 
   // Cover 180 degree rotation
   rotate_system(q, test);
-  dofulator_calculate(ctx, test->atoms.mass, test->atoms.x);
+  dofulator_calculate(ctx, test->atoms.mass, (const double(*)[3])test->atoms.x);
   result &= check_result(ctx, test, result);
 
   // Non-90 degree rotation
   angle = 30. * DEG;
   q = (Quaternion){.x = 0, .y = cos(30*DEG)*sin(angle/2.), .z = sin(30*DEG)*sin(angle/2.), .w = cos(angle/2.)};
   rotate_system(q, test);
-  dofulator_calculate(ctx, test->atoms.mass, test->atoms.x);
+  dofulator_calculate(ctx, test->atoms.mass, (const double(*)[3])test->atoms.x);
   result &= check_result(ctx, test, result);
 
   dofulator_destroy(&ctx);
