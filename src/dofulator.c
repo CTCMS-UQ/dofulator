@@ -14,7 +14,7 @@
 #include "quaternion.h"
 #include "vec3.h"
 
-typedef struct Fragment {
+struct Fragment {
   uint32_t n_atoms;         // Number of atoms in the fragment
   uint32_t n_modes;         // Maximum number of modes this fragment could have
   uint32_t rigid : 1;       // 1 = rigid, 0 = semirigid
@@ -31,8 +31,13 @@ typedef struct Fragment {
 
   double* dof;              // 3*n_atoms x n_modes matrix of M^1/2 J Q
   double* dof_total;        // 3*n_atoms vector of total direciontal dof
-} Fragment;
+};
 
+typedef struct FragmentList {
+  size_t capacity;      // Current capacity
+  size_t n_fragments;   // Number of fragments
+  Fragment* fragments;  // Individual fragments
+} FragmentList;
 
 // Reference frame for rigid fragments
 typedef struct RefFrame {
@@ -47,12 +52,6 @@ typedef struct FragIndex {
   size_t rigid : 1;
   size_t idx : (sizeof(size_t)*8 - 2);
 } FragIndex;
-
-typedef struct FragmentList {
-  size_t capacity;
-  size_t n_fragments;   // Number of fragments
-  Fragment* fragments;  // Individual fragments
-} FragmentList;
 
 
 struct Dofulator {
@@ -107,7 +106,10 @@ size_t fragmentlist_add_new(FragmentList* list, size_t n_atoms, bool rigid) {
   if (list->n_fragments >= list->capacity) {
     // List needs to grow, so pick a new capacity and extend it
     list->capacity = list->capacity < 4 ? 4 : list->capacity * 2;
-    list->fragments = realloc(list->fragments, sizeof(Fragment) * list->capacity);
+    Fragment* new = realloc(list->fragments, sizeof(Fragment) * list->capacity);
+    // TODO: handle error. Can't just overwrite list->fragments straight away in case realloc fails
+    assert(new);
+    list->fragments = new;
   }
 
   // Create the new fragment.
@@ -313,7 +315,7 @@ void dofulator_add_rigid_bond(Dofulator ctx, Bond b) {
       frag->root_atom = b.aj;
     }
     ctx->frag_map[b.aj] = (FragIndex){.rigid = false, .has_frag = true, .idx = idx_i};
-    
+
   } else if (ctx->frag_map[b.aj].has_frag) {
     assert(!ctx->frag_map[b.aj].rigid);
     // Add i to j's fragment
@@ -387,7 +389,7 @@ void dofulator_build_rigid_fragment(Dofulator ctx, Bond b) {
       frag->root_atom = b.aj;
     }
     ctx->frag_map[b.aj] = (FragIndex){.rigid = true, .has_frag = true, .idx = idx_i};
-    
+
   } else if (ctx->frag_map[b.aj].has_frag) {
     assert(ctx->frag_map[b.aj].rigid);
     // Add i to j's fragment
@@ -491,31 +493,43 @@ void dofulator_finalise_fragments(Dofulator ctx) {
   // Allocate space for Jacobians
 
   // Semirigid
-  ctx->dof_buf_semirigid = malloc(sizeof(double*) * ctx->max_semirigid_atoms);
-  ctx->dof_total_buf_semirigid = malloc(sizeof(double*) * ctx->max_semirigid_atoms);
-  for (size_t n_atoms = 1; n_atoms <= ctx->max_semirigid_atoms; ++n_atoms) {
-    size_t n_frag = ctx->n_semirigid[n_atoms-1];
-    if (n_frag == 0) {
-      ctx->dof_buf_semirigid[n_atoms-1] = NULL;
-      ctx->dof_total_buf_semirigid[n_atoms-1] = NULL;
-      continue;
+  if (ctx->max_semirigid_atoms > 0) {
+    ctx->dof_buf_semirigid = malloc(sizeof(double*) * ctx->max_semirigid_atoms);
+    assert(ctx->dof_buf_semirigid);
+    ctx->dof_total_buf_semirigid = malloc(sizeof(double*) * ctx->max_semirigid_atoms);
+    assert(ctx->dof_total_buf_semirigid);
+    for (size_t n_atoms = 1; n_atoms <= ctx->max_semirigid_atoms; ++n_atoms) {
+      size_t n_frag = ctx->n_semirigid[n_atoms-1];
+      if (n_frag == 0) {
+        ctx->dof_buf_semirigid[n_atoms-1] = NULL;
+        ctx->dof_total_buf_semirigid[n_atoms-1] = NULL;
+        continue;
+      }
+      ctx->dof_buf_semirigid[n_atoms-1] = malloc(sizeof(double) * n_frag * 3 * n_atoms * 3 * n_atoms);
+      assert(ctx->dof_buf_semirigid[n_atoms-1]);
+      ctx->dof_total_buf_semirigid[n_atoms-1] = malloc(sizeof(double) * n_frag * 3 * n_atoms);
+      assert(ctx->dof_total_buf_semirigid[n_atoms-1]);
     }
-    ctx->dof_buf_semirigid[n_atoms-1] = malloc(sizeof(double) * n_frag * 3 * n_atoms * 3 * n_atoms);
-    ctx->dof_total_buf_semirigid[n_atoms-1] = malloc(sizeof(double) * n_frag * 3 * n_atoms);
   }
-  
+
   // Rigid
-  ctx->dof_buf_rigid = malloc(sizeof(double*) * ctx->max_rigid_atoms);
-  ctx->dof_total_buf_rigid = malloc(sizeof(double*) * ctx->max_rigid_atoms);
-  for (size_t n_atoms = 1; n_atoms <= ctx->max_rigid_atoms; ++n_atoms) {
-    size_t n_frag = ctx->n_rigid[n_atoms-1];
-    if (n_frag == 0) {
-      ctx->dof_buf_rigid[n_atoms-1] = NULL;
-      ctx->dof_total_buf_rigid[n_atoms-1] = NULL;
-      continue;
+  if (ctx->max_rigid_atoms > 0) {
+    ctx->dof_buf_rigid = malloc(sizeof(double*) * ctx->max_rigid_atoms);
+    assert(ctx->dof_buf_rigid);
+    ctx->dof_total_buf_rigid = malloc(sizeof(double*) * ctx->max_rigid_atoms);
+    assert(ctx->dof_total_buf_rigid);
+    for (size_t n_atoms = 1; n_atoms <= ctx->max_rigid_atoms; ++n_atoms) {
+      size_t n_frag = ctx->n_rigid[n_atoms-1];
+      if (n_frag == 0) {
+        ctx->dof_buf_rigid[n_atoms-1] = NULL;
+        ctx->dof_total_buf_rigid[n_atoms-1] = NULL;
+        continue;
+      }
+      ctx->dof_buf_rigid[n_atoms-1] = malloc(sizeof(double) * n_frag * 3 * n_atoms * 6);
+      assert(ctx->dof_buf_rigid[n_atoms-1]);
+      ctx->dof_total_buf_rigid[n_atoms-1] = malloc(sizeof(double) * n_frag * 3 * n_atoms);
+      assert(ctx->dof_total_buf_rigid[n_atoms-1]);
     }
-    ctx->dof_buf_rigid[n_atoms-1] = malloc(sizeof(double) * n_frag * 3 * n_atoms * 6);
-    ctx->dof_total_buf_rigid[n_atoms-1] = malloc(sizeof(double) * n_frag * 3 * n_atoms);
   }
 
 
@@ -891,7 +905,7 @@ void dofulator_calculate_semirigid(Dofulator ctx, const double* mass, const doub
           // Calculate J_j - J_i, store 3 x 3*n_atoms result in Q
           memcpy(Q, &((*J)[3*j][0]), sizeof(double) * n_modes*3);
           cblas_daxpy(3*n_modes, -1.0, &((*J)[3*i][0]), 1, Q, 1);
-          
+
           // Calculate row k of K = T^T (J_j - J_i)
           // Use (J_j - J_i)^T x T and store result in K[k][:]
           cblas_dgemv(CblasRowMajor, CblasTrans, 3, n_modes, 1.0, Q, n_modes, rij, 1, 0., &((*K)[k][0]), 1);
@@ -1026,6 +1040,33 @@ double dofulator_get_dof_atom(const struct Dofulator* ctx, AtomTag atom_idx) {
   return frag->dof_total[3*i] + frag->dof_total[3*i + 1] + frag->dof_total[3*i + 2];
 }
 
+FragmentListIter dofulator_get_rigid_fragments(const struct Dofulator* ctx) {
+  return (FragmentListIter){
+    .fragments = ctx->rigid_frags.fragments,
+    .n_fragments = ctx->rigid_frags.n_fragments,
+    .idx = 0,
+  };
+}
+
+FragmentListIter dofulator_get_semirigid_fragments(const struct Dofulator* ctx) {
+  return (FragmentListIter){
+    .fragments = ctx->semirigid_frags.fragments,
+    .n_fragments = ctx->semirigid_frags.n_fragments,
+    .idx = 0,
+  };
+}
+
+const Fragment* fragmentlist_iter_next(FragmentListIter* iter) {
+  if (iter->idx < iter->n_fragments) {
+    return &iter->fragments[iter->idx++];
+  } else {
+    return NULL;
+  }
+}
+
+AtomListView fragment_get_atoms(const Fragment* frag) {
+  return (AtomListView){.atoms = frag->atoms, .n_atoms = frag->n_atoms};
+}
 
   // For each semirigid fragment in batch, need:
   //  - Jacobian space (mJ): (3*max_semirigid_atoms)^2

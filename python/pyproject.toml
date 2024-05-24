@@ -1,0 +1,26 @@
+[build-system]
+requires = [
+  "Cython >= 0.28",
+  # lowest NumPy we can use for a given Python,
+  # Copied from MDAnalysis
+  "numpy==1.23.2; python_version<='3.11' and platform_python_implementation != 'PyPy'",
+  "numpy==1.26.0; python_version=='3.12' and platform_python_implementation != 'PyPy'",
+  "numpy<2.0; python_version>='3.13'",
+  "setuptools >= 40.9.0",
+  "wheel",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dofulator-mda"
+version = "0.0.1"
+description = "MDAnalysis interface to Dofulator for DoF calculation of atoms with rigid constraints"
+dependencies = [
+  'numpy>=1.23.2'
+]
+
+[project.optional-dependencies]
+mdanalysis = [
+  'MDAnalysis',
+]
+

@@ -23,7 +23,7 @@ file(GLOB EXE_SRCS ${SRC_DIR}/frontend/*.c)
 
 
 # libdofulator.a
-add_library(dofulator STATIC ${LIB_SRCS})
+add_library(dofulator SHARED ${LIB_SRCS})
 target_include_directories(dofulator PRIVATE ${INCLUDE_DIRS})
 target_compile_options(dofulator PRIVATE "-Wall;-Wextra;-Wpedantic")
 
@@ -58,7 +58,7 @@ endif()
 configure_file(${SRC_DIR}/cblas_lapacke.h.in ${CMAKE_BINARY_DIR}/cblas_lapacke.h @ONLY USE_SOURCE_PERMISSIONS)
 target_include_directories(dofulator PRIVATE ${CMAKE_BINARY_DIR})
 
-target_link_libraries(dofulator PRIVATE ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
+target_link_libraries(dofulator PRIVATE m ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
 target_link_options(dofulator PRIVATE ${BLAS_LINKER_FLAGS} ${LAPACK_LINKER_FLAGS})
 if (ENABLE_ASAN)
   target_link_libraries(dofulator PUBLIC -fsanitize=address -fno-omit-frame-pointer)
