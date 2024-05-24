@@ -45,7 +45,7 @@ typedef struct RefFrame {
 typedef struct FragIndex {
   size_t has_frag : 1;
   size_t rigid : 1;
-  size_t idx : (sizeof(size_t) - 2);
+  size_t idx : (sizeof(size_t)*8 - 2);
 } FragIndex;
 
 typedef struct FragmentList {
