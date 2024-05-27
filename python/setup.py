@@ -23,12 +23,18 @@ def get_numpy_include():
     return np.get_include()
 
 __module_dir__ = os.path.abspath(os.path.dirname(__file__))
+# Pass in path to shared library if in non-standard location
+libpath = os.environ.get("DOFULATOR_SHARED_LIB")
+libdirs = [libpath] if libpath is not None else []
+
 setup(
     include_dirs=[get_numpy_include()],
     ext_modules=cythonize([
         Extension(
             'dofulator.dofulator',
             [os.path.join(__module_dir__, 'dofulator', 'dofulator.pyx')],
+            include_dirs=[os.path.join(__module_dir__, '..', 'src')],
+            library_dirs=libdirs,
             libraries=['dofulator'],
             define_macros=[('NPY_NO_DEPRECATED_API', 'NPY_1_7_API_VERSION')],
         )

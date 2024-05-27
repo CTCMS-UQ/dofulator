@@ -1,2 +1,5 @@
 build/
 .cache/
+__pycache__/
+python/dofulator/dofulator.c
+python/dofulator/dofulator.cpython*
