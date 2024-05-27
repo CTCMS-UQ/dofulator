@@ -20,8 +20,29 @@ cdef extern from "dofulator.h":
         size_t n_atoms
         const AtomTag* atoms
 
+    cdef enum PBC_typ:
+        PBC_NONE
+        PBC_TRI
+        PBC_ORTHO
+    cdef struct PBC:
+        PBC_typ typ
+        # Below are packed into an anonymous union,
+        # but Cython doesn't know about memory packing
+        # so this works to access them
+        double lx, ly, lz
+        double ax, bx, by, cx, cy, cz
+        double a[3]
+        double b[3]
+        double c[3]
+        # To prevent warnings:
+        double _pad_a[2]
+        double _pad_b
+        double _pad_yzx[3]
+        double _pad_zxy[3]
+
     Dofulator dofulator_create(AtomTag n_atoms)
     void dofulator_destroy(Dofulator* ctx)
+    void dofulator_set_pbc(Dofulator ctx, PBC pbc)
 
     void dofulator_add_rigid_bond(Dofulator ctx, Bond b)
     void dofulator_build_rigid_fragment(Dofulator ctx, Bond b)

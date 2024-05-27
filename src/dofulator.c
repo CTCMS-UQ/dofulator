@@ -76,6 +76,7 @@ struct Dofulator {
   double* svd_working;            // Working memory for SVD/eigenvector calculation (reallocated as necessary)
   double null_space_thresh;       // Fraction of the maximum singular value below which singular values are treated as 0
   lapack_int svd_working_size;    // Size of SVD/eigenvector working memory
+  PBC pbc;
 };
 
 #define MAX(X,Y) ((X) > (Y) ? (X) : (Y))
@@ -203,6 +204,114 @@ void dofulator_destroy(Dofulator* ctx) {
   self->working_buf_size = 0;
   self->svd_working_size = 0;
 }
+
+// Setter for pbc via opaque Dofulator handle
+void dofulator_set_pbc(Dofulator ctx, PBC pbc) {
+  ctx->pbc = pbc;
+}
+
+// Remap vector `r` to be within +/- 0.5*[lx, ly, lz] if necessary
+static inline void pbc_wrap_shortest(const PBC* pbc, double r[3]) {
+  switch (pbc->typ) {
+    case PBC_NONE:
+      return;
+
+    case PBC_TRI:
+      // z
+      if (r[2] > pbc->lz) {
+        int n = (int)(r[2]/pbc->lz);
+        r[0] -= n * pbc->cx;
+        r[1] -= n * pbc->cy;
+        r[2] -= n * pbc->cz;
+      }
+      while (r[2] > pbc->lz/2.) {
+        r[0] -= pbc->cx;
+        r[1] -= pbc->cy;
+        r[2] -= pbc->cz;
+      }
+      if (-r[2] > pbc->lz) {
+        int n = (int)(-r[2]/pbc->lz);
+        r[0] += n * pbc->cx;
+        r[1] += n * pbc->cy;
+        r[2] += n * pbc->cz;
+      }
+      while (r[2] < -pbc->lz/2.) {
+        r[0] += pbc->cx;
+        r[1] += pbc->cy;
+        r[2] += pbc->cz;
+      }
+
+      // y
+      if (r[1] > pbc->ly) {
+        int n = (int)(r[1]/pbc->ly);
+        r[0] -= n * pbc->bx;
+        r[1] -= n * pbc->by;
+      }
+      while (r[1] > pbc->ly/2.) {
+        r[0] -= pbc->bx;
+        r[1] -= pbc->by;
+      }
+      if (-r[1] > pbc->ly) {
+        int n = (int)(-r[1]/pbc->ly);
+        r[0] += n * pbc->bx;
+        r[1] += n * pbc->by;
+      }
+      while (r[1] < -pbc->ly/2.) {
+        r[0] += pbc->bx;
+        r[1] += pbc->by;
+      }
+
+      // x
+      if (r[0] > pbc->lx) {
+        int n = (int)(r[0]/pbc->lx);
+        r[0] -= n * pbc->ax;
+      }
+      while (r[0] > pbc->lx/2.) {
+        r[0] -= pbc->ax;
+      }
+      if (-r[0] > pbc->lz) {
+        int n = (int)(-r[0]/pbc->lx);
+        r[0] += n * pbc->ax;
+      }
+      while (r[0] < -pbc->lx/2.) {
+        r[0] += pbc->ax;
+      }
+      break;
+
+    case PBC_ORTHO:
+      // x
+      if (r[0] > pbc->lx) {
+        r[0] -= ((int)(r[0]/pbc->lx)) * pbc->lx;
+      }
+      while (r[0] >  pbc->lx/2.) r[0] -= pbc->lx;
+      if (-r[0] > pbc->lx) {
+        r[0] += ((int)(-r[0]/pbc->lx)) * pbc->lx;
+      }
+      while (r[0] < -pbc->lx/2.) r[0] += pbc->lx;
+
+      // y
+      if (r[1] > pbc->ly) {
+        r[1] -= ((int)(r[1]/pbc->ly)) * pbc->ly;
+      }
+      while (r[1] >  pbc->ly/2.) r[1] -= pbc->ly;
+      if (-r[1] > pbc->ly) {
+        r[1] += ((int)(-r[1]/pbc->ly)) * pbc->ly;
+      }
+      while (r[1] < -pbc->ly/2.) r[1] += pbc->ly;
+
+      // z
+      if (r[2] > pbc->lz) {
+        r[2] -= ((int)(r[2]/pbc->lz)) * pbc->lz;
+      }
+      while (r[2] >  pbc->lz/2.) r[2] -= pbc->lz;
+      if (-r[2] > pbc->lz) {
+        r[2] += ((int)(-r[2]/pbc->lz)) * pbc->lz;
+      }
+      while (r[2] < -pbc->lz/2.) r[2] += pbc->lz;
+      break;
+  }
+}
+
 
 // Set the batch size and reallocate working memory
 // Working memory:
@@ -673,12 +782,13 @@ void fragment_solve_dof(Dofulator ctx, Fragment* frag, double* mJ, double* Q) {
 
 // Get a normalized quaternion representing the rotation needed to bring the fragment
 // from its original orientation to the current one
-Quaternion frame_get_rotation(const RefFrame* frame, const double x[][3]) {
+Quaternion frame_get_rotation(const RefFrame* frame, const double x[][3], const PBC* pbc) {
   if (frame->ref_atom1 == frame->ref_atom2) {
     return quat_identity();
   }
   double a[3];
   vec_sub(x[frame->ref_atom2], x[frame->ref_atom1], a);
+  pbc_wrap_shortest(pbc, a);
 
   // Find quaternion which rotates a onto the r12 vector
   Quaternion qa = quat_from_closest_arc(a, frame->r12);
@@ -691,6 +801,7 @@ Quaternion frame_get_rotation(const RefFrame* frame, const double x[][3]) {
   // Apply qa rotation to b
   double b[3], c[3];
   vec_sub(x[frame->ref_atom3], x[frame->ref_atom1], b);
+  pbc_wrap_shortest(pbc, b);
   quat_rotate_vec(qa, b);
   vec_cross(frame->r12, b, c);
   vec_normalize(c);
@@ -714,7 +825,7 @@ Quaternion frame_get_rotation(const RefFrame* frame, const double x[][3]) {
 
 // Find reference atoms in the fragment and store them in `frame` along with the
 // relevant unit vectors which define the reference orientation
-void fragment_set_frame(const Fragment* frag, RefFrame* frame, const double x[][3]) {
+void fragment_set_frame(const Fragment* frag, RefFrame* frame, const double x[][3], const PBC* pbc) {
   if (frag->n_atoms == 0) { return; }
 
   AtomTag iatom = 0;
@@ -726,6 +837,7 @@ void fragment_set_frame(const Fragment* frag, RefFrame* frame, const double x[][
   double len2_a = 0., a[3];
   while (++iatom < frag->n_atoms && len2_a < 100*DBL_EPSILON) {
     vec_sub(x[frag->atoms[iatom]], x[frame->ref_atom1], a);
+    pbc_wrap_shortest(pbc, a);
     len2_a = vec_dot(a, a);
   }
   --iatom;
@@ -749,6 +861,7 @@ void fragment_set_frame(const Fragment* frag, RefFrame* frame, const double x[][
   double len2_b = 0., len2_c = 0.;
   while (++iatom < frag->n_atoms && len2_c < 100*DBL_EPSILON) {
     vec_sub(x[frag->atoms[iatom]], x[frame->ref_atom1], b);
+    pbc_wrap_shortest(pbc, b);
     len2_b = vec_dot(b, b);
     if (len2_b < 100*DBL_EPSILON) { continue; }
 
@@ -801,9 +914,8 @@ void dofulator_precalculate_rigid(Dofulator ctx, const double* mass, const doubl
         if (atom == root) { continue; }
 
         // Get vector from predecessor to atom i
-        rij[0] = x[atom][0] - x[root][0];
-        rij[1] = x[atom][1] - x[root][1];
-        rij[2] = x[atom][2] - x[root][2];
+        vec_sub(x[atom], x[root], rij);
+        pbc_wrap_shortest(&ctx->pbc, rij);
 
         /* Store negative cross operator
          *  0   z   -y
@@ -820,7 +932,7 @@ void dofulator_precalculate_rigid(Dofulator ctx, const double* mass, const doubl
         (*J)[3*i+2][4] = -root_mass * rij[0];
       }
       fragment_solve_dof(ctx, frag, mJ, Q);
-      fragment_set_frame(frag, &ctx->rigid_ref_frames[ifrag], x);
+      fragment_set_frame(frag, &ctx->rigid_ref_frames[ifrag], x, &ctx->pbc);
     }
   }
 }
@@ -828,7 +940,7 @@ void dofulator_precalculate_rigid(Dofulator ctx, const double* mass, const doubl
 // Calculate rotation quaternion for each rigid fragment.
 void dofulator_calculate_rigid(Dofulator ctx, const double x[][3]) {
   for (size_t ifrag = 0; ifrag < ctx->rigid_frags.n_fragments; ++ifrag) {
-    ctx->rigid_ref_frames[ifrag].current_rot = frame_get_rotation(&ctx->rigid_ref_frames[ifrag], x);
+    ctx->rigid_ref_frames[ifrag].current_rot = frame_get_rotation(&ctx->rigid_ref_frames[ifrag], x, &ctx->pbc);
   }
 }
 
@@ -866,9 +978,8 @@ void dofulator_calculate_semirigid(Dofulator ctx, const double* mass, const doub
           memcpy(&((*J)[3*i][0]), &((*J)[3*pred_i][0]), sizeof(double) * 3*n_atoms * 3);
 
           // Get vector from predecessor to atom i
-          rij[0] = x[atom][0] - x[pred][0];
-          rij[1] = x[atom][1] - x[pred][1];
-          rij[2] = x[atom][2] - x[pred][2];
+          vec_sub(x[atom], x[pred], rij);
+          pbc_wrap_shortest(&ctx->pbc, rij);
 
           /* Store negative cross operator
            *  0   z   -y
@@ -898,9 +1009,8 @@ void dofulator_calculate_semirigid(Dofulator ctx, const double* mass, const doub
           const size_t j = ctx->atom_frag_idx[b.aj];
 
           // T^T is a row vector for bonds
-          rij[0] = x[b.aj][0] - x[b.ai][0];
-          rij[1] = x[b.aj][1] - x[b.ai][1];
-          rij[2] = x[b.aj][2] - x[b.ai][2];
+          vec_sub(x[b.aj], x[b.ai], rij);
+          pbc_wrap_shortest(&ctx->pbc, rij);
 
           // Calculate J_j - J_i, store 3 x 3*n_atoms result in Q
           memcpy(Q, &((*J)[3*j][0]), sizeof(double) * n_modes*3);

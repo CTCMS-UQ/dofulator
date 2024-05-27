@@ -101,27 +101,6 @@ class MDADofulator(AnalysisBase):
         else:
             self._rigid_angles = rigid_angles
 
-    def _get_x_whole(self):
-        """
-        Dofulator needs position data of all atoms in the universe in double
-        precision, and rigid bodies/bonds/angles must not be discontinuous
-        across periodic boundaries.
-        """
-        if self._atomgroup.universe.dimensions is None:
-            mda.warnings.warn('No dimension data detected. Assuming non-periodic '
-                          'system. Dofulator will produce incorrect results '
-                          'if this system should be periodic.')
-        else:
-            # Make sure fragments don't wrap at periodic boundaries
-            # TODO: Pass dimensions into Dofulator context and unwrap
-            #       internally instead (should be faster)
-            for frag in self._ctx.get_rigid_fragments():
-                mdamath.make_whole(self._atomgroup.universe.atoms[frag.atoms()])
-            for frag in self._ctx.get_semirigid_fragments():
-                mdamath.make_whole(self._atomgroup.universe.atoms[frag.atoms()])
-        return self._atomgroup.universe.atoms.positions.astype(np.float64)
-
-
     def _setup_ctx(self):
         """
         Set up the Dofulator context for the current set of rigid bodies, bonds and angles.
@@ -155,6 +134,23 @@ class MDADofulator(AnalysisBase):
 
         self._ctx.finalise_fragments()
 
+    def _set_ctx_pbc(self):
+        """
+        Update PBCs in dofulator context.
+        """
+        dimensions = self._atomgroup.universe.dimensions
+        if dimensions is None:
+            mda.warnings.warn('No dimension data detected. Assuming non-periodic '
+                          'system. Dofulator will produce incorrect results '
+                          'if this system should be periodic.')
+            self._ctx.set_pbc_none()
+            return
+        if np.any(dimensions[3:6] != 90.):
+            self._ctx.set_pbc_ortho(dimensions.astype(np.float64))
+        else:
+            self._ctx.set_pbc_triclinic(mdamath.triclinic_vectors(dimensions).astype(np.float64))
+
+
     def _prepare(self):
         self._setup_ctx()
         if self.mode == 'atomic':
@@ -163,10 +159,12 @@ class MDADofulator(AnalysisBase):
             self.results = np.zeros((self.n_frames, self._atomgroup.n_atoms, 3), dtype=np.float64)
         all_atoms = self._atomgroup.universe.atoms
         self._masses = all_atoms.masses.astype(np.float64)
-        self._ctx.precalculate_rigid(self._masses, self._get_x_whole())
+        self._set_ctx_pbc()
+        self._ctx.precalculate_rigid(self._masses, all_atoms.positions.astype(np.float64))
 
     def _single_frame(self):
-        self._ctx.calculate(self._masses, self._get_x_whole())
+        self._set_ctx_pbc()
+        self._ctx.calculate(self._masses, self._atomgroup.universe.atoms.positions.astype(np.float64))
         if self.results.ndim == 2:
             # mode == 'atomic'
             self.results[self._frame_index, :] = \

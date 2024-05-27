@@ -41,8 +41,27 @@ typedef struct AtomListView {
 } AtomListView;
 
 
+typedef struct PBC {
+  enum { PBC_NONE = 0, PBC_TRI, PBC_ORTHO} typ;
+  union {
+    struct {
+      double lx, _pad_yzx[3], ly, _pad_zxy[3], lz;
+    };
+    struct {
+      double ax, _pad_a[2];
+      double bx, by, _pad_b;
+      double cx, cy, cz;
+    };
+    struct {
+      double a[3], b[3], c[3];
+    };
+  };
+} PBC;
+
+
 Dofulator dofulator_create(AtomTag n_atoms);
 void dofulator_destroy(Dofulator* ctx);
+void dofulator_set_pbc(Dofulator ctx, PBC pbc);
 
 void dofulator_add_rigid_bond(Dofulator ctx, Bond b);
 void dofulator_build_rigid_fragment(Dofulator ctx, Bond b);

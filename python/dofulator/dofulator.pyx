@@ -48,6 +48,41 @@ cdef class CDofulator:
         # TODO: Handle C memory errors
         dof.dofulator_finalise_fragments(self.ctx)
 
+    def set_pbc_none(self):
+        """
+        Turn off periodic boundary conditions
+        """
+        cdef PBC pbc
+        pbc.typ=PBC_NONE
+        dofulator_set_pbc(self.ctx, pbc)
+
+    def set_pbc_ortho(self, numpy.ndarray[numpy.float64_t,ndim=1] box):
+        """
+        Set periodic boundaries with an orthorhombix box.
+        `box = [lx, ly, lz]`
+        """
+        cdef PBC pbc
+        pbc.typ = PBC_ORTHO
+        pbc.lx = box[0]
+        pbc.ly = box[1]
+        pbc.lz = box[2]
+        dofulator_set_pbc(self.ctx, pbc)
+
+    def set_pbc_triclinic(self, numpy.ndarray[numpy.float64_t,ndim=2] box):
+        """
+        Set periodic boundaries with a triclinic box.
+        `box = [[ax, 0, 0], [bx, by, 0], [cx, cy, cz]]`
+        """
+        cdef PBC pbc
+        pbc.typ = PBC_TRI
+        pbc.ax = box[0,0]
+        pbc.bx = box[1,0]
+        pbc.by = box[1,1]
+        pbc.cx = box[2,0]
+        pbc.cy = box[2,1]
+        pbc.cz = box[2,2]
+        dofulator_set_pbc(self.ctx, pbc)
+
     def precalculate_rigid(
         self,
         numpy.ndarray[numpy.float64_t,ndim=1] mass,
@@ -107,11 +142,17 @@ cdef class CDofulator:
         return (d[0], d[1], d[2])
 
     def get_rigid_fragments(self):
+        """
+        Get iterator over rigid fragments
+        """
         frags = FragmentIter()
         frags._iter = dofulator_get_rigid_fragments(self.ctx)
         return frags
 
     def get_semirigid_fragments(self):
+        """
+        Get iterator over semirigid fragments
+        """
         frags = FragmentIter()
         frags._iter = dofulator_get_semirigid_fragments(self.ctx)
         return frags
