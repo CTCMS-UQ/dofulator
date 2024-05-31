@@ -1029,7 +1029,7 @@ void dofulator_calculate_semirigid(Dofulator ctx, const double* mass, const doub
           'N', // Don't calculate any of U
           'A', // Calculate all of V^T
           n_loops, n_modes,
-          &((*K)[0][0]), n_loops,
+          &((*K)[0][0]), n_modes,
           S,
           NULL, frag->n_loops,
           VT, n_modes,
@@ -1050,7 +1050,7 @@ void dofulator_calculate_semirigid(Dofulator ctx, const double* mass, const doub
           'N', // Don't calculate any of U
           'A', // Calculate all of V^T
           n_loops, n_modes,
-          &((*K)[0][0]), n_loops,
+          &((*K)[0][0]), n_modes,
           S,
           NULL, frag->n_loops,
           VT, n_modes,
