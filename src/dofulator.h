@@ -2,18 +2,20 @@
 #define LIBDOFULATOR_H
 
 #include <stdlib.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+// May be overridden by build system for compatibility
 #ifndef AtomTag
-#define AtomTag size_t
+#define AtomTag int64_t
 #endif
 
 // TODO: This should be left at 1 for now since batch operations
 //       aren't implemented properly yet.
-#ifndef DOFULATOR_DEFAULT_BATCH_SIZE 
+#ifndef DOFULATOR_DEFAULT_BATCH_SIZE
 #define DOFULATOR_DEFAULT_BATCH_SIZE 1
 #endif
 
@@ -72,6 +74,9 @@ void dofulator_calculate(Dofulator ctx, const double* mass, const double x[][3])
 
 void dofulator_get_dof_atom_directional(const struct Dofulator* ctx, AtomTag atom_idx, double dof[3]);
 double dofulator_get_dof_atom(const struct Dofulator* ctx, AtomTag atom_idx);
+
+double* dofulator_get_dof_atoms(const struct Dofulator* ctx, const size_t n_atoms, const AtomTag* atoms, double* dof);
+double* dofulator_get_dof_atoms_directional(const struct Dofulator* ctx, const size_t n_atoms, const AtomTag* atoms, double dof[][3]);
 
 FragmentListIter dofulator_get_rigid_fragments(const struct Dofulator* ctx);
 FragmentListIter dofulator_get_semirigid_fragments(const struct Dofulator* ctx);

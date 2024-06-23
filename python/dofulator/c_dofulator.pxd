@@ -1,8 +1,9 @@
 from libc.stddef import size_t
+from libc.stdint import int64_t
 
 cdef extern from "dofulator.h":
     ctypedef void* Dofulator
-    ctypedef size_t AtomTag
+    ctypedef signed long AtomTag
 
     cdef struct Bond:
         AtomTag ai
@@ -53,6 +54,9 @@ cdef extern from "dofulator.h":
 
     void dofulator_get_dof_atom_directional(const void* ctx, AtomTag atom_idx, double dof[3])
     double dofulator_get_dof_atom(const void* ctx, AtomTag atom_idx)
+
+    double* dofulator_get_dof_atoms(void* ctx, const size_t n_atoms, const AtomTag* atoms, double* dof);
+    double* dofulator_get_dof_atoms_directional(void* ctx, const size_t n_atoms, const AtomTag* atoms, double dof[][3]);
 
     FragmentListIter dofulator_get_rigid_fragments(const void* ctx);
     FragmentListIter dofulator_get_semirigid_fragments(const void* ctx);

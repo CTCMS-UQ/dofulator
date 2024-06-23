@@ -22,7 +22,7 @@ struct Fragment {
                             // is the index of the fragment it was merged into
   uint32_t n_loops : 30;    // Number of kinematic loops (length of `loop_closures`)
 
-  size_t root_atom;         // Root atom of the fragment's tree.
+  AtomTag root_atom;        // Root atom of the fragment's tree.
                             // For merged fragments, this is the idx of the parent
                             // fragment in the context's `frag_map`.
 
@@ -218,96 +218,108 @@ static inline void pbc_wrap_shortest(const PBC* pbc, double r[3]) {
 
     case PBC_TRI:
       // z
-      if (r[2] > pbc->lz) {
-        int n = (int)(r[2]/pbc->lz);
-        r[0] -= n * pbc->cx;
-        r[1] -= n * pbc->cy;
-        r[2] -= n * pbc->cz;
-      }
-      while (r[2] > pbc->lz/2.) {
-        r[0] -= pbc->cx;
-        r[1] -= pbc->cy;
-        r[2] -= pbc->cz;
-      }
-      if (-r[2] > pbc->lz) {
-        int n = (int)(-r[2]/pbc->lz);
-        r[0] += n * pbc->cx;
-        r[1] += n * pbc->cy;
-        r[2] += n * pbc->cz;
-      }
-      while (r[2] < -pbc->lz/2.) {
-        r[0] += pbc->cx;
-        r[1] += pbc->cy;
-        r[2] += pbc->cz;
+      if (pbc->lz != 0.) {
+        if (r[2] > pbc->lz) {
+          int n = (int)(r[2]/pbc->lz);
+          r[0] -= n * pbc->cx;
+          r[1] -= n * pbc->cy;
+          r[2] -= n * pbc->cz;
+        }
+        while (r[2] > pbc->lz/2.) {
+          r[0] -= pbc->cx;
+          r[1] -= pbc->cy;
+          r[2] -= pbc->cz;
+        }
+        if (-r[2] > pbc->lz) {
+          int n = (int)(-r[2]/pbc->lz);
+          r[0] += n * pbc->cx;
+          r[1] += n * pbc->cy;
+          r[2] += n * pbc->cz;
+        }
+        while (r[2] < -pbc->lz/2.) {
+          r[0] += pbc->cx;
+          r[1] += pbc->cy;
+          r[2] += pbc->cz;
+        }
       }
 
       // y
-      if (r[1] > pbc->ly) {
-        int n = (int)(r[1]/pbc->ly);
-        r[0] -= n * pbc->bx;
-        r[1] -= n * pbc->by;
-      }
-      while (r[1] > pbc->ly/2.) {
-        r[0] -= pbc->bx;
-        r[1] -= pbc->by;
-      }
-      if (-r[1] > pbc->ly) {
-        int n = (int)(-r[1]/pbc->ly);
-        r[0] += n * pbc->bx;
-        r[1] += n * pbc->by;
-      }
-      while (r[1] < -pbc->ly/2.) {
-        r[0] += pbc->bx;
-        r[1] += pbc->by;
+      if (pbc->ly != 0.) {
+        if (r[1] > pbc->ly) {
+          int n = (int)(r[1]/pbc->ly);
+          r[0] -= n * pbc->bx;
+          r[1] -= n * pbc->by;
+        }
+        while (r[1] > pbc->ly/2.) {
+          r[0] -= pbc->bx;
+          r[1] -= pbc->by;
+        }
+        if (-r[1] > pbc->ly) {
+          int n = (int)(-r[1]/pbc->ly);
+          r[0] += n * pbc->bx;
+          r[1] += n * pbc->by;
+        }
+        while (r[1] < -pbc->ly/2.) {
+          r[0] += pbc->bx;
+          r[1] += pbc->by;
+        }
       }
 
       // x
-      if (r[0] > pbc->lx) {
-        int n = (int)(r[0]/pbc->lx);
-        r[0] -= n * pbc->ax;
-      }
-      while (r[0] > pbc->lx/2.) {
-        r[0] -= pbc->ax;
-      }
-      if (-r[0] > pbc->lz) {
-        int n = (int)(-r[0]/pbc->lx);
-        r[0] += n * pbc->ax;
-      }
-      while (r[0] < -pbc->lx/2.) {
-        r[0] += pbc->ax;
+      if (pbc->lz != 0.) {
+        if (r[0] > pbc->lx) {
+          int n = (int)(r[0]/pbc->lx);
+          r[0] -= n * pbc->ax;
+        }
+        while (r[0] > pbc->lx/2.) {
+          r[0] -= pbc->ax;
+        }
+        if (-r[0] > pbc->lz) {
+          int n = (int)(-r[0]/pbc->lx);
+          r[0] += n * pbc->ax;
+        }
+        while (r[0] < -pbc->lx/2.) {
+          r[0] += pbc->ax;
+        }
       }
       break;
 
     case PBC_ORTHO:
       // x
-      if (r[0] > pbc->lx) {
-        r[0] -= ((int)(r[0]/pbc->lx)) * pbc->lx;
+      if (pbc->lx != 0.) {
+        if (r[0] > pbc->lx) {
+          r[0] -= ((int)(r[0]/pbc->lx)) * pbc->lx;
+        }
+        while (r[0] >  pbc->lx/2.) r[0] -= pbc->lx;
+        if (-r[0] > pbc->lx) {
+          r[0] += ((int)(-r[0]/pbc->lx)) * pbc->lx;
+        }
+        while (r[0] < -pbc->lx/2.) r[0] += pbc->lx;
       }
-      while (r[0] >  pbc->lx/2.) r[0] -= pbc->lx;
-      if (-r[0] > pbc->lx) {
-        r[0] += ((int)(-r[0]/pbc->lx)) * pbc->lx;
-      }
-      while (r[0] < -pbc->lx/2.) r[0] += pbc->lx;
 
       // y
-      if (r[1] > pbc->ly) {
-        r[1] -= ((int)(r[1]/pbc->ly)) * pbc->ly;
+      if (pbc->ly != 0.) {
+        if (r[1] > pbc->ly) {
+          r[1] -= ((int)(r[1]/pbc->ly)) * pbc->ly;
+        }
+        while (r[1] >  pbc->ly/2.) r[1] -= pbc->ly;
+        if (-r[1] > pbc->ly) {
+          r[1] += ((int)(-r[1]/pbc->ly)) * pbc->ly;
+        }
+        while (r[1] < -pbc->ly/2.) r[1] += pbc->ly;
       }
-      while (r[1] >  pbc->ly/2.) r[1] -= pbc->ly;
-      if (-r[1] > pbc->ly) {
-        r[1] += ((int)(-r[1]/pbc->ly)) * pbc->ly;
-      }
-      while (r[1] < -pbc->ly/2.) r[1] += pbc->ly;
 
       // z
-      if (r[2] > pbc->lz) {
-        r[2] -= ((int)(r[2]/pbc->lz)) * pbc->lz;
+      if (pbc->lz != 0.) {
+        if (r[2] > pbc->lz) {
+          r[2] -= ((int)(r[2]/pbc->lz)) * pbc->lz;
+        }
+        while (r[2] >  pbc->lz/2.) r[2] -= pbc->lz;
+        if (-r[2] > pbc->lz) {
+          r[2] += ((int)(-r[2]/pbc->lz)) * pbc->lz;
+        }
+        while (r[2] < -pbc->lz/2.) r[2] += pbc->lz;
       }
-      while (r[2] >  pbc->lz/2.) r[2] -= pbc->lz;
-      if (-r[2] > pbc->lz) {
-        r[2] += ((int)(-r[2]/pbc->lz)) * pbc->lz;
-      }
-      while (r[2] < -pbc->lz/2.) r[2] += pbc->lz;
       break;
   }
 }
@@ -953,7 +965,7 @@ void dofulator_calculate_semirigid(Dofulator ctx, const double* mass, const doub
     ++n_frags
   ) {
     if (*n_frags == 0) { continue; }
-    const size_t n_atoms = ctx->semirigid_frags.fragments[ifrag].n_atoms;
+    const AtomTag n_atoms = ctx->semirigid_frags.fragments[ifrag].n_atoms;
     const size_t mat_size = 3*n_atoms * 3*n_atoms;
     double* mJ = ctx->working_buf;
     double* Q = mJ + mat_size;
@@ -1100,6 +1112,10 @@ void dofulator_calculate(Dofulator ctx, const double* mass, const double x[][3])
 
 // Get the directional DoF of the atom with index `atom_idx`
 void dofulator_get_dof_atom_directional(const struct Dofulator* ctx, AtomTag atom_idx, double dof[3]) {
+  if (atom_idx >= ctx->n_atoms) {
+    dof[0] = dof[1] = dof[2] = 0.;
+    return;
+  }
   FragIndex frag_idx = ctx->frag_map[atom_idx];
   if (!frag_idx.has_frag) {
     // TODO: Account for global CoM velocity constraint
@@ -1134,6 +1150,9 @@ void dofulator_get_dof_atom_directional(const struct Dofulator* ctx, AtomTag ato
 
 // Get the total DoF of the atom with index `atom_idx`
 double dofulator_get_dof_atom(const struct Dofulator* ctx, AtomTag atom_idx) {
+  if (atom_idx >= ctx->n_atoms) {
+    return 0.;
+  }
   FragIndex frag_idx = ctx->frag_map[atom_idx];
   if (!frag_idx.has_frag) {
     // TODO: Account for global CoM velocity constraint
@@ -1148,6 +1167,48 @@ double dofulator_get_dof_atom(const struct Dofulator* ctx, AtomTag atom_idx) {
     frag = &ctx->semirigid_frags.fragments[frag_idx.idx];
   }
   return frag->dof_total[3*i] + frag->dof_total[3*i + 1] + frag->dof_total[3*i + 2];
+}
+
+double* dofulator_get_dof_atoms(
+  const struct Dofulator* ctx,
+  const size_t n_atoms,
+  const AtomTag* atoms,
+  double* dof
+) {
+  if (dof == NULL) {
+    dof = malloc(sizeof(double) * n_atoms);
+  }
+  if (atoms) {
+    for (size_t i = 0; i < n_atoms; ++i) {
+      dof[i] = dofulator_get_dof_atom(ctx, atoms[i]);
+    }
+  } else {
+    for (size_t i = 0; i < n_atoms; ++i) {
+      dof[i] = dofulator_get_dof_atom(ctx, i);
+    }
+  }
+  return dof;
+}
+
+double* dofulator_get_dof_atoms_directional(
+  const struct Dofulator* ctx,
+  const size_t n_atoms,
+  const AtomTag* atoms,
+  double dof[][3]
+) {
+  if (dof == NULL) {
+    dof = (double(*)[3])malloc(sizeof(double) * n_atoms * 3);
+  }
+  if (atoms) {
+    for (size_t i = 0; i < n_atoms; ++i) {
+      dofulator_get_dof_atom_directional(ctx, atoms[i], dof[i]);
+    }
+  } else {
+    for (size_t i = 0; i < n_atoms; ++i) {
+      dofulator_get_dof_atom_directional(ctx, i, dof[i]);
+    }
+  }
+  return &dof[0][0];
 }
 
 FragmentListIter dofulator_get_rigid_fragments(const struct Dofulator* ctx) {

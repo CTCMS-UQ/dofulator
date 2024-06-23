@@ -1,0 +1,35 @@
+[build-system]
+requires = [
+  "cython >= 0.28",
+  # lowest NumPy version for a given Python version, copied from MDAnalysis
+  "numpy>=1.23.2; python_version<='3.11' and platform_python_implementation != 'PyPy'",
+  "numpy==1.26.0; python_version=='3.12' and platform_python_implementation != 'PyPy'",
+  "numpy<2.0; python_version>='3.13'",
+  "scikit-build-core",
+]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "dofulator"
+version = "0.0.1"
+description = "Python interface to Dofulator for DoF calculation of atoms with rigid constraints"
+dependencies = [
+  'numpy>=1.23.2'
+]
+
+[project.optional-dependencies]
+mdanalysis = [
+  'MDAnalysis',
+]
+
+[tool.scikit-build]
+cmake.targets = ["c_dofulator"]
+ninja.make-fallback = false
+
+[tool.scikit-build.cmake.define]
+# Need int64_t atom tags for MDAnalysis compatibility
+DOF_ATOM_TAG_TYPE = "int64_t"
+# Build library only without frontend
+DOF_LIBRARY_ONLY = "ON"
+# Base library must be statically linked to cython library
+DOF_SHARED_LIB = "OFF"

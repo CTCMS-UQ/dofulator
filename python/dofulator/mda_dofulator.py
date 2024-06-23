@@ -8,7 +8,7 @@ from MDAnalysis.core.topologyobjects import Angle, Bond
 from MDAnalysis.core.universe import Atom
 from MDAnalysis.analysis.base import AnalysisBase
 
-from .dofulator import CDofulator as Dofulator
+from .c_dofulator import CDofulator as Dofulator
 
 
 
@@ -65,9 +65,12 @@ class MDADofulator(AnalysisBase):
             else:
                 raise ValueError(f'Invalid value "{rigid_bodies}" for argument `rigid_bodies`')
         elif type(rigid_bodies) is ResidueGroup:
-            self._rigid_bodies = ((a for a in r.atoms) for r in rigid_bodies)
-        else:
+            self._rigid_bodies = [[a for a in r.atoms] for r in rigid_bodies]
+        elif type(rigid_bodies) is list and (type(rigid_bodies[0] is list) or type(rigid_bodies[0]) is mda.AtomGroup):
+            # Avoid deep copy of list
             self._rigid_bodies = rigid_bodies
+        else:
+            self._rigid_bodies = [[a for a in r] for r in rigid_bodies] if rigid_bodies else None
 
     def set_rigid_bonds(self, rigid_bonds: str|Iterable[Bond]|None = None):
         """
@@ -83,8 +86,11 @@ class MDADofulator(AnalysisBase):
                 self._rigid_bonds = self._atomgroup.bonds
             else:
                 raise ValueError(f'Invalid value "{rigid_bonds}" for argument `rigid_bonds`')
-        else:
+        elif type(rigid_bonds) is list:
+            # Avoid deep copy of list
             self._rigid_bonds = rigid_bonds
+        else:
+            self._rigid_bonds = [b for b in rigid_bonds] if rigid_bonds else None
 
     def set_rigid_angles(self, rigid_angles: str|Iterable[Angle]|None = None):
         """
@@ -98,8 +104,11 @@ class MDADofulator(AnalysisBase):
                 self._rigid_angles = self._atomgroup.angles
             else:
                 raise ValueError(f'Invalid value "{rigid_angles}" for argument `rigid_angles`')
-        else:
+        elif type(rigid_angles) is list:
+            # Avoid deep copy of list
             self._rigid_angles = rigid_angles
+        else:
+            self._rigid_angles = [a for a in rigid_angles] if rigid_angles else None
 
     def _setup_ctx(self):
         """
@@ -167,12 +176,10 @@ class MDADofulator(AnalysisBase):
         self._ctx.calculate(self._masses, self._atomgroup.universe.atoms.positions.astype(np.float64))
         if self.results.ndim == 2:
             # mode == 'atomic'
-            self.results[self._frame_index, :] = \
-                [self._ctx.get_dof(ix) for ix in self._atomgroup.ix]
+            self._ctx.get_all_dof(self._atomgroup.ix, self.results[self._frame_index, :])
         else:
             # mode == 'directional'
-            self.results[self._frame_index, :, :] = \
-                [self._ctx.get_dof_directional(a) for a in self._atomgroup.ix]
+            self._ctx.get_all_dof_directional(self._atomgroup.ix,self.results[self._frame_index, :, :])
 
     def _conclude(self):
         pass

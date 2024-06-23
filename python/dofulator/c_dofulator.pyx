@@ -5,8 +5,8 @@ import numpy
 cimport numpy
 numpy.import_array()
 
-cimport dofulator.dofulator as dof
-from dofulator.dofulator cimport Dofulator, AtomTag, Bond, FragmentListIter, AtomListView
+cimport dofulator.c_dofulator as dof
+from dofulator.c_dofulator cimport Dofulator, AtomTag, Bond, FragmentListIter, AtomListView
 
 cdef class CDofulator:
     cdef Dofulator ctx
@@ -157,6 +157,73 @@ cdef class CDofulator:
         frags._iter = dofulator_get_semirigid_fragments(self.ctx)
         return frags
 
+    def get_all_dof(self, atoms=None, buffer=None):
+        """
+        Get DoF of all atoms in `atoms`.
+        Optionally store result directly in `buffer`, which should be of type `np.float64`
+        If `atoms` is `None`, gets DoF of all atoms (index 0 to self.n_atoms-1)
+        """
+        cdef AtomTag N
+        if atoms is None:
+            N = self.n_atoms
+        else:
+            N = len(atoms)
+        if buffer is None:
+            buf = numpy.empty((N,), dtype=numpy.float64, order='C')
+            self._get_all_dof(atoms, buf)
+            return buf
+        if buffer.shape[0] < N:
+            raise IndexError("`buffer` must have space for at least as many items in `atoms`")
+        self._get_all_dof(atoms, buffer)
+        return buffer
+
+    def _get_all_dof(self, numpy.ndarray[numpy.int64_t,ndim=1] atoms, numpy.ndarray[numpy.float64_t,ndim=1] buffer):
+        cdef AtomTag i
+        cdef AtomTag N
+        cdef double* buf = cython.cast(cython.pointer(double), buffer.data)
+        if atoms is None:
+            dof.dofulator_get_dof_atoms(self.ctx, buffer.shape[0], cython.NULL, buf)
+        else:
+            dof.dofulator_get_dof_atoms(
+                self.ctx,
+                atoms.shape[0],
+                cython.cast(cython.pointer(AtomTag), atoms.data),
+                buf
+            )
+
+    def get_all_dof_directional(self, atoms=None, buffer=None):
+        """
+        Get directional DoF of all atoms in `atoms`.
+        Optionally store result directly in `buffer`, which should be an n x 3 array of type `np.float64`
+        If `atoms` is `None`, gets DoF of all atoms (index 0 to self.n_atoms-1)
+        """
+        cdef AtomTag N
+        if atoms is None:
+            N = self.n_atoms
+        else:
+            N = len(atoms)
+        if buffer is None:
+            buf = numpy.empty((N, 3), dtype=numpy.float64, order='C')
+            self._get_all_dof_directional(atoms, buf)
+            return buf
+        if buffer.shape[1] != 3 or buffer.shape[0] < N:
+            raise IndexError("`buffer` must have at least as many rows as `atoms`, and exactly 3 columns")
+        self._get_all_dof_directional(atoms, buffer)
+        return buffer
+
+    def _get_all_dof_directional(self, numpy.ndarray[numpy.int64_t,ndim=1] atoms, numpy.ndarray[numpy.float64_t,ndim=2,mode='c'] buffer):
+        cdef AtomTag i
+        cdef AtomTag N
+        cdef double[3]* buf = cython.cast(cython.pointer(double[3]), buffer.data)
+        if atoms is None:
+            dof.dofulator_get_dof_atoms_directional(self.ctx, buffer.shape[0], cython.NULL, buf)
+        else:
+            dof.dofulator_get_dof_atoms_directional(
+                self.ctx,
+                atoms.shape[0],
+                cython.cast(cython.pointer(AtomTag), atoms.data),
+                buf
+            )
 
 
 cdef class FragmentHandle:
