@@ -184,6 +184,7 @@ cdef class CDofulator:
         if atoms is None:
             dof.dofulator_get_dof_atoms(self.ctx, buffer.shape[0], cython.NULL, buf)
         else:
+            atoms = numpy.ascontiguousarray(atoms)
             dof.dofulator_get_dof_atoms(
                 self.ctx,
                 atoms.shape[0],
@@ -218,6 +219,7 @@ cdef class CDofulator:
         if atoms is None:
             dof.dofulator_get_dof_atoms_directional(self.ctx, buffer.shape[0], cython.NULL, buf)
         else:
+            atoms = numpy.ascontiguousarray(atoms)
             dof.dofulator_get_dof_atoms_directional(
                 self.ctx,
                 atoms.shape[0],

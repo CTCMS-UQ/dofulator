@@ -115,7 +115,7 @@ class MDADofulator(AnalysisBase):
         Set up the Dofulator context for the current set of rigid bodies, bonds and angles.
         Any previously used context is destroyed.
         """
-        max_ix = max((ix for ix in self._atomgroup.universe.atoms.ix))
+        max_ix = np.max(self._atomgroup.universe.atoms.ix)
         if hasattr(self, '_ctx') and self._ctx:
             del self._ctx
         self._ctx = Dofulator(max_ix+1)
@@ -171,10 +171,13 @@ class MDADofulator(AnalysisBase):
         self._set_ctx_pbc()
         self._ctx.precalculate_rigid(self._masses, all_atoms.positions.astype(np.float64))
 
-    def _single_frame(self):
+    def _calculate(self):
         # PBCs may be changing, so update them
         self._set_ctx_pbc()
         self._ctx.calculate(self._masses, self._atomgroup.universe.atoms.positions.astype(np.float64))
+
+    def _single_frame(self):
+        self._calculate()
         if self.results.ndim == 2:
             # mode == 'atomic'
             self._ctx.get_all_dof(self._atomgroup.ix, self.results[self._frame_index, :])
