@@ -1,8 +1,6 @@
 #include <assert.h>
 #include <float.h>
 #include <math.h>
-#include <openblas/cblas.h>
-#include <openblas/lapacke.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -11,49 +9,15 @@
 
 #include "cblas_lapacke.h"
 #include "dofulator.h"
+#include "fragment.h"
 #include "quaternion.h"
 #include "vec3.h"
 
-struct Fragment {
-  uint32_t n_atoms;         // Number of atoms in the fragment
-  uint32_t n_modes;         // Maximum number of modes this fragment could have
-  uint32_t rigid : 1;       // 1 = rigid, 0 = semirigid
-  uint32_t invalid : 1;     // 1 = fragment has been invalidated, in which case root_atom
-                            // is the index of the fragment it was merged into
-  uint32_t n_loops : 30;    // Number of kinematic loops (length of `loop_closures`)
+#define MAX(X,Y) ((X) > (Y) ? (X) : (Y))
 
-  AtomTag root_atom;        // Root atom of the fragment's tree.
-                            // For merged fragments, this is the idx of the parent
-                            // fragment in the context's `frag_map`.
-
-  AtomTag* atoms;           // Indices of atoms in this fragment. Stored in ascending order.
-  Bond* loop_closures;      // Rigid bonds that create kinematic loops
-
-  double* dof;              // 3*n_atoms x n_modes matrix of M^1/2 J Q
-  double* dof_total;        // 3*n_atoms vector of total direciontal dof
-};
-
-typedef struct FragmentList {
-  size_t capacity;      // Current capacity
-  size_t n_fragments;   // Number of fragments
-  Fragment* fragments;  // Individual fragments
-} FragmentList;
-
-// Reference frame for rigid fragments
-typedef struct RefFrame {
-  size_t ref_atom1, ref_atom2, ref_atom3; // Atoms to use to construct the reference frame for rigid fragments
-                                          // ref_atom2 == ref_atom3 if only 2 atoms
-  double r12[3], r13_perp[3]; // r12 and (r12 x r13) vectors in the original coordinates
-  Quaternion current_rot;
-} RefFrame;
-
-typedef struct FragIndex {
-  size_t has_frag : 1;
-  size_t rigid : 1;
-  size_t idx : (sizeof(size_t)*8 - 2);
-} FragIndex;
-
-
+/*******************************************************************************
+ * Main context object
+*/
 struct Dofulator {
   AtomTag n_atoms;                // Number of atoms in frag_map
   FragIndex* frag_map;            // Index of fragment corresponding to given atom
@@ -79,66 +43,10 @@ struct Dofulator {
   PBC pbc;
 };
 
-#define MAX(X,Y) ((X) > (Y) ? (X) : (Y))
 
-static inline Fragment fragment_create(AtomTag n_atoms, bool rigid) {
-  return (Fragment){
-    .n_atoms = n_atoms,
-    .rigid = rigid,
-    .n_loops = 0,
-  };
-}
-
-void fragment_set_max_modes(Fragment* frag) {
-  frag->n_modes = frag->rigid ? 6 : 3 * frag->n_atoms;
-}
-
-// Add a new rigid fragment with `n_atoms` atoms to `list`.
-#define fragmentlist_add_rigid(list, n_atoms) fragmentlist_add_new((list), (n_atoms), true)
-
-// Add a new semirigid fragment with `n_atoms` atoms to `list`.
-#define fragmentlist_add_semirigid(list, n_atoms) fragmentlist_add_new((list), (n_atoms), false)
-
-// Add a new fragment with `n_atoms` atoms to `list`.
-// `rigid` should be `true` for rigid fragments, or `false` for semirigid.
-size_t fragmentlist_add_new(FragmentList* list, size_t n_atoms, bool rigid) {
-  // Find the next empty slot
-  // Allocate if needed
-  if (list->n_fragments >= list->capacity) {
-    // List needs to grow, so pick a new capacity and extend it
-    list->capacity = list->capacity < 4 ? 4 : list->capacity * 2;
-    Fragment* new = realloc(list->fragments, sizeof(Fragment) * list->capacity);
-    // TODO: handle error. Can't just overwrite list->fragments straight away in case realloc fails
-    assert(new);
-    list->fragments = new;
-  }
-
-  // Create the new fragment.
-  // Allocation and filling of atom list/buffers comes later.
-  size_t idx = list->n_fragments++;
-  list->fragments[idx] = fragment_create(n_atoms, rigid);
-
-  return idx;
-}
-
-void fragmentlist_destroy(FragmentList* self) {
-  if (!self) return;
-  if (self->fragments) free(self->fragments);
-  self->n_fragments = 0;
-  self->capacity = 0;
-}
-
-// Get index of the top-level fragment containing fragment `idx`.
-// Used to get updated fragment index from an invalidated (merged) fragment.
-size_t fragmentlist_get_idx(FragmentList fraglist, size_t idx) {
-  if (!fraglist.fragments[idx].invalid) {
-    return idx;
-  }
-  return fragmentlist_get_idx(fraglist, fraglist.fragments[idx].root_atom);
-}
-
-// Create a dofulator context with capacity for `n_atoms` total atoms (could
-// contain many rigid or semi-rigid fragments)
+/*******************************************************************************
+ * Create a dofulator context with space for `n_atoms` atoms
+*/
 Dofulator dofulator_create(AtomTag n_atoms) {
   struct Dofulator ctx = {
     .n_atoms = n_atoms,
@@ -157,6 +65,10 @@ Dofulator dofulator_create(AtomTag n_atoms) {
   return out;
 }
 
+
+/*******************************************************************************
+ * Clean up a dofulator context.
+*/
 void dofulator_destroy(Dofulator* ctx) {
   Dofulator self = *ctx;
   *ctx = NULL;
@@ -205,12 +117,17 @@ void dofulator_destroy(Dofulator* ctx) {
   self->svd_working_size = 0;
 }
 
-// Setter for pbc via opaque Dofulator handle
+/*******************************************************************************
+ * Setter for pbc via opaque handle
+*/
 void dofulator_set_pbc(Dofulator ctx, PBC pbc) {
   ctx->pbc = pbc;
 }
 
-// Remap vector `r` to be within +/- 0.5*[lx, ly, lz] if necessary
+
+/*******************************************************************************
+ * Remap vector `r` to be within +/- 0.5*[lx, ly, lz] if necessary
+*/
 static inline void pbc_wrap_shortest(const PBC* pbc, double r[3]) {
   switch (pbc->typ) {
     case PBC_NONE:
@@ -325,31 +242,34 @@ static inline void pbc_wrap_shortest(const PBC* pbc, double r[3]) {
 }
 
 
-// Set the batch size and reallocate working memory
-// Working memory:
-// Max. Jacobian size = MAX((max_semirigid_atoms * 3)^2, (max_rigid_atoms*3 * 6))
-// Max. Eigenvector size = MAX((max_semirigid_atoms * 3)^2, 6^2)
-//
-// Solve process:
-// Build J (in mJQ for loops, or in mJ for trees/rigid)
-// (loops only)
-//    build K from J (can use mJ scratch space for result, VT scratch for J_j - J_i, Q scratch for T^T) -> batched dgemm for each T^T (J_j - J_i)
-//    find null(K) (store in VT scratch space, singular values in dof_total)
-//      -> dgesvd in loop over batch. Pass NULL for U.
-//      -> Also needs WORK storage (get size from dgesvd call, can allocate for single fragment and re-use)
-//    project J onto null(K) (store in mJ scratch space) -> batched dgemm
-// Calculate sqrt(m) J (directly in scratch mJ space) -> dscal (batched?) modifies in-place
-// Calculate mJ^T mJ (store in Q scratch space) -> batched dgemm
-// Calculate eigenvectors (result replaces Q) -> dsyev in loop over batch, eigenvalues in Itotal
-// Calculate mJQ = mJ (mJ scratch space) * Q (Q scratch space) -> batched dgemm
-// Calculate dof[i][m] = mJQ[i][m] mJQ[i][m] / Itotal[m]
-//
-// Storage requirements per batch:
-// - mJ space (Jacobian size)
-// - Q  space (Eigenvector size)
-// - VT space (Jacobian size - semi-rigid only)
-// - WORK space for SVD (pick largest required by any loop-closing fragments)
-void dofulator_update_batch_size(Dofulator ctx, size_t batch_size) {
+/*******************************************************************************
+ * Set the batch size and reallocate working memory
+ *
+ * Working memory:
+ * Max. Jacobian size = MAX((max_semirigid_atoms * 3)^2, (max_rigid_atoms*3 * 6))
+ * Max. Eigenvector size = MAX((max_semirigid_atoms * 3)^2, 6^2)
+ *
+ * Solve process:
+ * Build J (in mJQ for loops, or in mJ for trees/rigid)
+ * (loops only)
+ *    build K from J (can use mJ scratch space for result, VT scratch for J_j - J_i, Q scratch for T^T) -> batched dgemm for each T^T (J_j - J_i)
+ *    find null(K) (store in VT scratch space, singular values in dof_total)
+ *      -> dgesvd in loop over batch. Pass NULL for U.
+ *      -> Also needs WORK storage (get size from dgesvd call, can allocate for single fragment and re-use)
+ *    project J onto null(K) (store in mJ scratch space) -> batched dgemm
+ * Calculate sqrt(m) J (directly in scratch mJ space) -> dscal (batched?) modifies in-place
+ * Calculate mJ^T mJ (store in Q scratch space) -> batched dgemm
+ * Calculate eigenvectors (result replaces Q) -> dsyev in loop over batch, eigenvalues in Itotal
+ * Calculate mJQ = mJ (mJ scratch space) * Q (Q scratch space) -> batched dgemm
+ * Calculate dof[i][m] = mJQ[i][m] mJQ[i][m] / Itotal[m]
+ *
+ * Storage requirements per batch:
+ * - mJ space (Jacobian size)
+ * - Q  space (Eigenvector size)
+ * - VT space (Jacobian size - semi-rigid only)
+ * - WORK space for SVD (pick largest required by any loop-closing fragments)
+*/
+static inline void dofulator_update_batch_size(Dofulator ctx, size_t batch_size) {
   ctx->batch_size = batch_size;
   size_t semirigid_size = 3 * ctx->max_semirigid_atoms * 3 * ctx->max_semirigid_atoms;
   size_t max_jacobian = MAX( 3 * ctx->max_rigid_atoms * 6, semirigid_size);
@@ -361,29 +281,27 @@ void dofulator_update_batch_size(Dofulator ctx, size_t batch_size) {
   assert(ctx->working_buf);
 }
 
-// Get the index of the semirigid fragment which contains the atom with indiex `atom_idx`.
-// May mutate `ctx->frag_map` if it points to an invalidated (merged) fragment.
-size_t dofulator_get_semirigid_idx(Dofulator ctx, size_t atom_idx) {
-  size_t guess = ctx->frag_map[atom_idx].idx;
-  size_t idx = fragmentlist_get_idx(ctx->semirigid_frags, guess);
-  if (idx != guess) {
-    ctx->frag_map[atom_idx].idx = idx;
-  }
-  return idx;
+
+/*******************************************************************************
+ * Get the index of the semi-rigid fragment which contains the atom with index `atom_idx`.
+ * May mutate `ctx->frag_map` if it points to an invalidated (merged) fragment.
+*/
+static inline size_t dofulator_get_semirigid_idx(Dofulator ctx, AtomTag atom_idx) {
+  return fragmentlist_get_fragment_idx(ctx->semirigid_frags, ctx->frag_map, atom_idx);
 }
 
-// Get the index of the rigid fragment which contains the atom with indiex `atom_idx`.
-// May mutate `ctx->frag_map` if it points to an invalidated (merged) fragment.
-size_t dofulator_get_rigid_idx(Dofulator ctx, size_t atom_idx) {
-  size_t guess = ctx->frag_map[atom_idx].idx;
-  size_t idx = fragmentlist_get_idx(ctx->rigid_frags, guess);
-  if (idx != guess) {
-    ctx->frag_map[atom_idx].idx = idx;
-  }
-  return idx;
+/*******************************************************************************
+ * Get the index of the rigid fragment which contains the atom with index `atom_idx`.
+ * May mutate `ctx->frag_map` if it points to an invalidated (merged) fragment.
+*/
+static inline size_t dofulator_get_rigid_idx(Dofulator ctx, AtomTag atom_idx) {
+  return fragmentlist_get_fragment_idx(ctx->rigid_frags, ctx->frag_map, atom_idx);
 }
 
-// Update list of semirigid fragments to account for a rigid bond.
+
+/*******************************************************************************
+ * Update list of semirigid fragments to account for a rigid bond.
+*/
 void dofulator_add_rigid_bond(Dofulator ctx, Bond b) {
   assert(b.ai < ctx->n_atoms && b.aj < ctx->n_atoms);
   assert(ctx);
@@ -463,7 +381,10 @@ void dofulator_add_rigid_bond(Dofulator ctx, Bond b) {
   }
 }
 
-// Add atoms in bond `b` to a rigid fragment
+
+/*******************************************************************************
+ * Add atoms in bond `b` to the same rigid fragment
+*/
 void dofulator_build_rigid_fragment(Dofulator ctx, Bond b) {
   assert(b.ai < ctx->n_atoms && b.aj < ctx->n_atoms);
   assert(ctx);
@@ -531,11 +452,14 @@ void dofulator_build_rigid_fragment(Dofulator ctx, Bond b) {
   }
 }
 
-// Compare function for sorting fragments
-// Fragments with `invalid == true` are invalidated fragments which
-// have been merged into others, and hence are sorted to the end.
-// Fragments with `n_atoms == 0` are also sorted to the end to be skipped.
-int fragment_sort_cmp(const void* f1, const void* f2) {
+
+/*******************************************************************************
+ * Compare function for sorting fragments
+ * Fragments with `invalid == true` are invalidated fragments which
+ * have been merged into others, and hence are sorted to the end.
+ * Fragments with `n_atoms == 0` are also sorted to the end to be skipped.
+*/
+static int fragment_sort_cmp(const void* f1, const void* f2) {
   size_t n1 = ((Fragment*)f1)->n_atoms;
   size_t n2 = ((Fragment*)f2)->n_atoms;
   if (n1 == 0 || ((Fragment*)f1)->invalid) n1 = SIZE_MAX >> 1;
@@ -545,8 +469,9 @@ int fragment_sort_cmp(const void* f1, const void* f2) {
   return 0;
 }
 
-// Finalise fragments by consolidating merged fragments
-// and allocating memory for buffers.
+/*******************************************************************************
+ * Consolidate merged fragments and allocate memory for buffers.
+*/
 void dofulator_finalise_fragments(Dofulator ctx) {
   // Calculate space for semi-rigid fragments
   for (size_t i = 0; i < ctx->semirigid_frags.n_fragments; ++i) {
@@ -722,9 +647,11 @@ void dofulator_finalise_fragments(Dofulator ctx) {
 }
 
 
-// Solve for DoF matrix of the given fragment.
-// TODO: batched alternative
-void fragment_solve_dof(Dofulator ctx, Fragment* frag, double* mJ, double* Q) {
+/*******************************************************************************
+ * Solve for DoF matrix of the given fragment.
+ * TODO: batched alternative
+*/
+static void fragment_solve_dof(Dofulator ctx, Fragment* frag, double* mJ, double* Q) {
   const size_t n_atoms = frag->n_atoms;
   const size_t row_stride = frag->rigid ? 6 : 3*n_atoms;
   // Store J^T M J in Q ready for eigensolve
@@ -786,58 +713,17 @@ void fragment_solve_dof(Dofulator ctx, Fragment* frag, double* mJ, double* Q) {
 
   // Sum up total DoF in each direction
   for (size_t a = 0; a < frag->n_atoms; ++a) {
-    frag->dof_total[3*a]   = cblas_dsum(frag->n_modes, &frag->dof[ 3*a    * row_stride], 1);
-    frag->dof_total[3*a+1] = cblas_dsum(frag->n_modes, &frag->dof[(3*a+1) * row_stride], 1);
-    frag->dof_total[3*a+2] = cblas_dsum(frag->n_modes, &frag->dof[(3*a+2) * row_stride], 1);
+    frag->dof_total[3*a]   = dsum(frag->n_modes, &frag->dof[ 3*a    * row_stride]);
+    frag->dof_total[3*a+1] = dsum(frag->n_modes, &frag->dof[(3*a+1) * row_stride]);
+    frag->dof_total[3*a+2] = dsum(frag->n_modes, &frag->dof[(3*a+2) * row_stride]);
   }
 }
 
-// Get a normalized quaternion representing the rotation needed to bring the fragment
-// from its original orientation to the current one
-Quaternion frame_get_rotation(const RefFrame* frame, const double x[][3], const PBC* pbc) {
-  if (frame->ref_atom1 == frame->ref_atom2) {
-    return quat_identity();
-  }
-  double a[3];
-  vec_sub(x[frame->ref_atom2], x[frame->ref_atom1], a);
-  pbc_wrap_shortest(pbc, a);
-
-  // Find quaternion which rotates a onto the r12 vector
-  Quaternion qa = quat_from_closest_arc(a, frame->r12);
-
-  // If linear fragment, qa is all that's needed
-  if (frame->ref_atom3 == frame->ref_atom2) {
-    return qa;
-  }
-
-  // Apply qa rotation to b
-  double b[3], c[3];
-  vec_sub(x[frame->ref_atom3], x[frame->ref_atom1], b);
-  pbc_wrap_shortest(pbc, b);
-  quat_rotate_vec(qa, b);
-  vec_cross(frame->r12, b, c);
-  vec_normalize(c);
-
-  // Get rotation around r12 axis such that c aligns with r13_perp == r12 x r13.
-  // frame->r12 and r13_perp are normalized.
-  Quaternion qb = quat_from_vec(frame->r12);
-  double cos_angle = vec_dot(c, frame->r13_perp);
-  if (fabs(1. + cos_angle) > 100.*DBL_EPSILON) {
-    // Need non-zero axis if w is zero or normalizing gives NaN
-    double sin_angle = sqrt(1 - cos_angle*cos_angle);
-    qb.x *= sin_angle;
-    qb.y *= sin_angle;
-    qb.z *= sin_angle;
-  }
-  qb.w = 1. + cos_angle;
-  qb = quat_normalize(qb);
-
-  return quat_mul(qb, qa);
-}
-
-// Find reference atoms in the fragment and store them in `frame` along with the
-// relevant unit vectors which define the reference orientation
-void fragment_set_frame(const Fragment* frag, RefFrame* frame, const double x[][3], const PBC* pbc) {
+/*******************************************************************************
+ * Find reference atoms in the fragment and store them in `frame` along with the
+ * relevant unit vectors which define the reference orientation
+*/
+static void fragment_set_frame(const Fragment* frag, RefFrame* frame, const double x[][3], const PBC* pbc) {
   if (frag->n_atoms == 0) { return; }
 
   AtomTag iatom = 0;
@@ -893,8 +779,11 @@ void fragment_set_frame(const Fragment* frag, RefFrame* frame, const double x[][
   }
 }
 
-// Pre-calculate modal, directional DoF of rigid fragments, since these can just be rotated
-// with the fragment rather than re-calculating each time
+
+/*******************************************************************************
+ * Pre-calculate modal, directional DoF of rigid fragments, since these can just
+ * be rotated with the fragment rather than re-calculating each time
+*/
 void dofulator_precalculate_rigid(Dofulator ctx, const double* mass, const double x[][3]) {
   assert(ctx);
   ctx->rigid_ref_frames = realloc(ctx->rigid_ref_frames, sizeof(RefFrame) * ctx->rigid_frags.n_fragments);
@@ -949,16 +838,68 @@ void dofulator_precalculate_rigid(Dofulator ctx, const double* mass, const doubl
   }
 }
 
-// Calculate rotation quaternion for each rigid fragment.
-void dofulator_calculate_rigid(Dofulator ctx, const double x[][3]) {
+
+/*******************************************************************************
+ * Get a normalized quaternion representing the rotation needed to bring the
+ * fragment from its original orientation to the current one
+*/
+static Quaternion frame_get_rotation(const RefFrame* frame, const double x[][3], const PBC* pbc) {
+  if (frame->ref_atom1 == frame->ref_atom2) {
+    return quat_identity();
+  }
+  double a[3];
+  vec_sub(x[frame->ref_atom2], x[frame->ref_atom1], a);
+  pbc_wrap_shortest(pbc, a);
+
+  // Find quaternion which rotates a onto the r12 vector
+  Quaternion qa = quat_from_closest_arc(a, frame->r12);
+
+  // If linear fragment, qa is all that's needed
+  if (frame->ref_atom3 == frame->ref_atom2) {
+    return qa;
+  }
+
+  // Apply qa rotation to b
+  double b[3], c[3];
+  vec_sub(x[frame->ref_atom3], x[frame->ref_atom1], b);
+  pbc_wrap_shortest(pbc, b);
+  quat_rotate_vec(qa, b);
+  vec_cross(frame->r12, b, c);
+  vec_normalize(c);
+
+  // Get rotation around r12 axis such that c aligns with r13_perp == r12 x r13.
+  // frame->r12 and r13_perp are normalized.
+  Quaternion qb = quat_from_vec(frame->r12);
+  double cos_angle = vec_dot(c, frame->r13_perp);
+  if (fabs(1. + cos_angle) > 100.*DBL_EPSILON) {
+    // Need non-zero axis if w is zero or normalizing gives NaN
+    double sin_angle = sqrt(1 - cos_angle*cos_angle);
+    qb.x *= sin_angle;
+    qb.y *= sin_angle;
+    qb.z *= sin_angle;
+  }
+  qb.w = 1. + cos_angle;
+  qb = quat_normalize(qb);
+
+  return quat_mul(qb, qa);
+}
+
+
+/*******************************************************************************
+ * Calculate rotation quaternion for each rigid fragment.
+*/
+static inline void dofulator_calculate_rigid(Dofulator ctx, const double x[][3]) {
   for (size_t ifrag = 0; ifrag < ctx->rigid_frags.n_fragments; ++ifrag) {
     ctx->rigid_ref_frames[ifrag].current_rot = frame_get_rotation(&ctx->rigid_ref_frames[ifrag], x, &ctx->pbc);
   }
 }
 
-// Calculate dof_total and dof for all semirigid fragments based on given masses
-// and atom locations (indexed by atom index)
-void dofulator_calculate_semirigid(Dofulator ctx, const double* mass, const double x[][3]) {
+
+/*******************************************************************************
+ * Calculate `dof_total` and `dof` for all semirigid fragments based on given
+ * masses and atom locations (indexed by atom index)
+*/
+static inline void dofulator_calculate_semirigid(Dofulator ctx, const double* mass, const double x[][3]) {
   for (
     size_t ifrag = 0, *n_frags = ctx->n_semirigid;
     n_frags < ctx->n_semirigid + ctx->max_semirigid_atoms;
@@ -1102,15 +1043,69 @@ void dofulator_calculate_semirigid(Dofulator ctx, const double* mass, const doub
       fragment_solve_dof(ctx, frag, mJ, Q);
     }
   }
+
+  // PLANNING:
+  // For each semirigid fragment in batch, need:
+  //  - Jacobian space (mJ): (3*max_semirigid_atoms)^2
+  //  - Eigenvector space:
+  //    + Q: (3*max_semirigid_atoms)^2
+  //    + dof_total: 3*max_semirigid_atoms
+  //  - Auxilliary space for n_closures loop closures:
+  //    + space for K matrix construction:
+  //      = T: 3 <- Use same space as VT since can be overwritten
+  //      = (J_j - J_i): 3*(3*max_semirigid_atoms)
+  //        * Use same space as VT since can be overwritten
+  //        * Probably fastest to use daxpy on full batch to do subtraction
+  //          and store in VT memory, then dgemv to fill K?
+  //      = K: n_closures * 3*max_semirigid_atoms
+  //        * Fill by re-using T, (J_j - Ji) memory space for each closure
+  //    + space for SVD of K:
+  //      = U: none - pass NULL for U arg
+  //      = S: n_closures
+  //      = VT: (3*max_semirigid_atoms)^2
+  //      = WORK: get from dgesvd call
+  //    + space for J * V[:, rank(S):]
+  //      = Can store in eigenvector space and pointer swap back into J
+  //  (use eigenvector space since this comes first?)
 }
 
-// Calculate DoF of all fragments in the context
+
+/*******************************************************************************
+ * Calculate DoF of all fragments in the context
+*/
 void dofulator_calculate(Dofulator ctx, const double* mass, const double x[][3]) {
   dofulator_calculate_rigid(ctx, x);
   dofulator_calculate_semirigid(ctx, mass, x);
 }
 
-// Get the directional DoF of the atom with index `atom_idx`
+
+/*******************************************************************************
+ * Get the total DoF of the atom with index `atom_idx`
+*/
+double dofulator_get_dof_atom(const struct Dofulator* ctx, AtomTag atom_idx) {
+  if (atom_idx >= ctx->n_atoms) {
+    return 0.;
+  }
+  FragIndex frag_idx = ctx->frag_map[atom_idx];
+  if (!frag_idx.has_frag) {
+    // TODO: Account for global CoM velocity constraint
+    return 3.;
+  }
+
+  const size_t i = ctx->atom_frag_idx[atom_idx];
+  Fragment* frag;
+  if (frag_idx.rigid) {
+    frag = &ctx->rigid_frags.fragments[frag_idx.idx];
+  } else {
+    frag = &ctx->semirigid_frags.fragments[frag_idx.idx];
+  }
+  return frag->dof_total[3*i] + frag->dof_total[3*i + 1] + frag->dof_total[3*i + 2];
+}
+
+
+/*******************************************************************************
+ * Get the directional DoF of the atom with index `atom_idx`
+*/
 void dofulator_get_dof_atom_directional(const struct Dofulator* ctx, AtomTag atom_idx, double dof[3]) {
   if (atom_idx >= ctx->n_atoms) {
     dof[0] = dof[1] = dof[2] = 0.;
@@ -1148,27 +1143,10 @@ void dofulator_get_dof_atom_directional(const struct Dofulator* ctx, AtomTag ato
 
 }
 
-// Get the total DoF of the atom with index `atom_idx`
-double dofulator_get_dof_atom(const struct Dofulator* ctx, AtomTag atom_idx) {
-  if (atom_idx >= ctx->n_atoms) {
-    return 0.;
-  }
-  FragIndex frag_idx = ctx->frag_map[atom_idx];
-  if (!frag_idx.has_frag) {
-    // TODO: Account for global CoM velocity constraint
-    return 3.;
-  }
 
-  const size_t i = ctx->atom_frag_idx[atom_idx];
-  Fragment* frag;
-  if (frag_idx.rigid) {
-    frag = &ctx->rigid_frags.fragments[frag_idx.idx];
-  } else {
-    frag = &ctx->semirigid_frags.fragments[frag_idx.idx];
-  }
-  return frag->dof_total[3*i] + frag->dof_total[3*i + 1] + frag->dof_total[3*i + 2];
-}
-
+/*******************************************************************************
+ * Get the total DoF of the `n_atoms` atoms with indices in `atoms`.
+*/
 double* dofulator_get_dof_atoms(
   const struct Dofulator* ctx,
   const size_t n_atoms,
@@ -1190,6 +1168,10 @@ double* dofulator_get_dof_atoms(
   return dof;
 }
 
+
+/*******************************************************************************
+ * Get the directional DoF of the `n_atoms` atoms with indices in `atoms`.
+*/
 double* dofulator_get_dof_atoms_directional(
   const struct Dofulator* ctx,
   const size_t n_atoms,
@@ -1211,6 +1193,10 @@ double* dofulator_get_dof_atoms_directional(
   return &dof[0][0];
 }
 
+
+/*******************************************************************************
+ * Get an iterator over the list of rigid bodies
+*/
 FragmentListIter dofulator_get_rigid_fragments(const struct Dofulator* ctx) {
   return (FragmentListIter){
     .fragments = ctx->rigid_frags.fragments,
@@ -1219,6 +1205,9 @@ FragmentListIter dofulator_get_rigid_fragments(const struct Dofulator* ctx) {
   };
 }
 
+/*******************************************************************************
+ * Get an iterator over the list of semi-rigid fragments
+*/
 FragmentListIter dofulator_get_semirigid_fragments(const struct Dofulator* ctx) {
   return (FragmentListIter){
     .fragments = ctx->semirigid_frags.fragments,
@@ -1227,6 +1216,10 @@ FragmentListIter dofulator_get_semirigid_fragments(const struct Dofulator* ctx) 
   };
 }
 
+
+/*******************************************************************************
+ * Get the next fragment from the iterator
+*/
 const Fragment* fragmentlist_iter_next(FragmentListIter* iter) {
   if (iter->idx < iter->n_fragments) {
     return &iter->fragments[iter->idx++];
@@ -1235,29 +1228,11 @@ const Fragment* fragmentlist_iter_next(FragmentListIter* iter) {
   }
 }
 
+
+/*******************************************************************************
+ * Get a read-only view of atoms in a given fragment
+*/
 AtomListView fragment_get_atoms(const Fragment* frag) {
   return (AtomListView){.atoms = frag->atoms, .n_atoms = frag->n_atoms};
 }
 
-  // For each semirigid fragment in batch, need:
-  //  - Jacobian space (mJ): (3*max_semirigid_atoms)^2
-  //  - Eigenvector space:
-  //    + Q: (3*max_semirigid_atoms)^2
-  //    + dof_total: 3*max_semirigid_atoms
-  //  - Auxilliary space for n_closures loop closures:
-  //    + space for K matrix construction:
-  //      = T: 3 <- Use same space as VT since can be overwritten
-  //      = (J_j - J_i): 3*(3*max_semirigid_atoms)
-  //        * Use same space as VT since can be overwritten
-  //        * Probably fastest to use daxpy on full batch to do subtraction
-  //          and store in VT memory, then dgemv to fill K?
-  //      = K: n_closures * 3*max_semirigid_atoms
-  //        * Fill by re-using T, (J_j - Ji) memory space for each closure
-  //    + space for SVD of K:
-  //      = U: none - pass NULL for U arg
-  //      = S: n_closures
-  //      = VT: (3*max_semirigid_atoms)^2
-  //      = WORK: get from dgesvd call
-  //    + space for J * V[:, rank(S):]
-  //      = Can store in eigenvector space and pointer swap back into J
-  //  (use eigenvector space since this comes first?)

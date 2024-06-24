@@ -20,11 +20,11 @@ set(DOF_ATOM_TAG_TYPE "int64_t" CACHE STRING "Integer data type for atom identif
 
 set(SRC_DIR ${PROJECT_SOURCE_DIR}/src)
 set(INCLUDE_DIRS ${INCLUDE_DIRECTORIES} ${SRC_DIR})
-file(GLOB LIB_SRCS ${SRC_DIR}/dofulator.c)
-file(GLOB EXE_SRCS ${SRC_DIR}/frontend/*.c)
 
 
+################################################################################
 # dofulator core library
+file(GLOB LIB_SRCS ${SRC_DIR}/dofulator.c)
 if (DOF_SHARED_LIB)
   message(STATUS "Building dofulator backend as shared library")
   add_library(dofulator SHARED ${LIB_SRCS})
@@ -45,7 +45,8 @@ endif()
 install(TARGETS dofulator EXPORT dofulator_Targets DESTINATION lib)
 install(FILES ${SRC_DIR}/dofulator.h DESTINATION include)
 
-# Set up cblas and lapacke includes
+################################################################################
+# Set up cblas and lapacke includes/linkage
 # Default vendor can be overridden by setting BLA_VENDOR
 # OpenBLAS seems to beat MKL in speed for all test cases
 set(BLA_STATIC ON)
@@ -53,44 +54,56 @@ find_package(LAPACK REQUIRED)
 find_package(BLAS REQUIRED)
 
 if (BLA_VENDOR STREQUAL OpenBLAS)
-  set(INCLUDE_CBLAS "#include <openblas/cblas.h>")
-  set(INCLUDE_LAPACKE "#include <openblas/lapacke.h>")
+  set(INCLUDE_CBLAS "openblas/cblas.h")
+  set(INCLUDE_LAPACKE "openblas/lapacke.h")
+  target_compile_definitions(dofulator PRIVATE BLA_VENDOR_OPENBLAS)
 elseif (BLA_VENDOR MATCHES "[(Intel)(Intel10_32)(Intel10_64lp)(Intel10_64lp_seq)(Intel10_64ilp)(Intel10_64ilp_seq)(Intel10_64_dyn)]")
   find_package(MKL CONFIG REQUIRED PATHS $ENV{MKLROOT})
-  set(INCLUDE_CBLAS "#include <mkl_cblas.h>")
-  set(INCLUDE_LAPACKE "#include <mkl_lapacke.h>")
+  set(INCLUDE_CBLAS "mkl_cblas.h")
+  set(INCLUDE_LAPACKE "mkl_lapacke.h")
   target_compile_options(dofulator PUBLIC $<TARGET_PROPERTY:MKL::MKL,INTERFACE_COMPILE_OPTIONS>)
   target_compile_definitions(dofulator PRIVATE MKL_EXTENSIONS)
   target_include_directories(dofulator PUBLIC $<TARGET_PROPERTY:MKL::MKL,INTERFACE_INCLUDE_DIRECTORIES>)
   target_link_libraries(dofulator PUBLIC $<LINK_ONLY:MKL::MKL>)
 else()
-  message(WARNING "Unsupported blas vendor - may not be able to find the header."
-    "If compilation fails, try pointing INCLUDE_DIRECTORIES to the include directory of the blas implementation.")
-  set(INCLUDE_CBLAS "#include <cblas.h>")
-  set(INCLUDE_LAPACKE "#include <lapacke.h>")
+  message(WARNING
+    "Unsupported BLAS/LAPACK vendor - may not be able to find headers."
+    "If compilation fails, try pointing INCLUDE_DIRECTORIES to the include directory of the BLAS/LAPACK implementations."
+    "Alternatively, you can set BLA_VENDOR to use a different BLAS/LAPACK implementation."
+  )
+  set(INCLUDE_CBLAS "cblas.h")
+  set(INCLUDE_LAPACKE "lapacke.h")
 endif()
 
-configure_file(${SRC_DIR}/cblas_lapacke.h.in ${CMAKE_BINARY_DIR}/cblas_lapacke.h @ONLY USE_SOURCE_PERMISSIONS)
+configure_file(${SRC_DIR}/cblas_lapacke.in.h ${CMAKE_BINARY_DIR}/cblas_lapacke.h @ONLY USE_SOURCE_PERMISSIONS)
 target_include_directories(dofulator PRIVATE ${CMAKE_BINARY_DIR})
 
 target_link_libraries(dofulator PRIVATE m ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
 target_link_options(dofulator PRIVATE ${BLAS_LINKER_FLAGS} ${LAPACK_LINKER_FLAGS})
+
+
+################################################################################
+# Address/UB sanitization
 if (ENABLE_ASAN)
   target_link_libraries(dofulator PUBLIC -fsanitize=address -fno-omit-frame-pointer)
 endif()
+
 if (ENABLE_UBSAN)
   target_link_libraries(dofulator PUBLIC -fsanitize=undefined)
 endif()
 
 
+################################################################################
 # dof binary
 if (NOT DOF_LIBRARY_ONLY)
+  file(GLOB EXE_SRCS ${SRC_DIR}/frontend/*.c)
   add_executable(dof ${EXE_SRCS})
   target_include_directories(dof PRIVATE ${SRC_DIR})
   target_link_libraries(dof PRIVATE dofulator m)
 endif()
 
 
+################################################################################
 # Turn on link time optimisation if supported
 if (ENABLE_LTO)
   include(CheckIPOSupported)
@@ -109,6 +122,8 @@ else()
   message(STATUS "IPO / LTO: disabled")
 endif()
 
+
+################################################################################
 # Set up testing
 if (ENABLE_TESTING)
   message(STATUS "Testing: enabled")
@@ -123,6 +138,8 @@ else()
   message(STATUS "Testing: disabled")
 endif()
 
+
+################################################################################
 # Optional python package
 find_package(Python COMPONENTS Interpreter Development.Module NumPy)
 if (Python_FOUND)

@@ -167,11 +167,12 @@ class MDADofulator(AnalysisBase):
         elif self.mode == 'directional':
             self.results = np.zeros((self.n_frames, self._atomgroup.n_atoms, 3), dtype=np.float64)
         all_atoms = self._atomgroup.universe.atoms
-        self._masses = all_atoms.masses.astype(np.float64)
+        self._masses = all_atoms.masses.astype(np.float64)  # Assume masses don't change during run
         self._set_ctx_pbc()
         self._ctx.precalculate_rigid(self._masses, all_atoms.positions.astype(np.float64))
 
     def _single_frame(self):
+        # PBCs may be changing, so update them
         self._set_ctx_pbc()
         self._ctx.calculate(self._masses, self._atomgroup.universe.atoms.positions.astype(np.float64))
         if self.results.ndim == 2:
