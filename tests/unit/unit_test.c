@@ -65,41 +65,83 @@ bool run_test(Test* test) {
     printf("FAILED\n\tError creating dofulator context!\n");
     return false;
   }
+  DofulatorResult err;
+  size_t iter = 0;
   for (Bond* b = test->bonds.bonds; b < test->bonds.bonds + test->bonds.n; ++b) {
     switch (test->test_type) {
       case RIGID:
-        dofulator_build_rigid_fragment(ctx, *b);
+        err = dofulator_build_rigid_fragment(ctx, *b);
         break;
       case FLEX:
-        dofulator_add_rigid_bond(ctx, *b);
+        err = dofulator_add_rigid_bond(ctx, *b);
+    }
+    if (err) {
+      result = false;
+      goto cleanup;
     }
   }
-  dofulator_finalise_fragments(ctx);
-  dofulator_precalculate_rigid(ctx, test->atoms.mass, (const double(*)[3])test->atoms.x);
+  err = dofulator_finalise_fragments(ctx);
+  if (err) {
+    result = false;
+    goto cleanup;
+  }
+  err = dofulator_precalculate_rigid(ctx, test->atoms.mass, (const double(*)[3])test->atoms.x);
+  if (err) {
+    result = false;
+    goto cleanup;
+  }
 
-  dofulator_calculate(ctx, test->atoms.mass, (const double(*)[3])test->atoms.x);
+  ++iter;
+  err = dofulator_calculate(ctx, test->atoms.mass, (const double(*)[3])test->atoms.x);
+  if (err) {
+    result = false;
+    goto cleanup;
+  }
   result &= check_result(ctx, test, result);
+  if (!result) goto cleanup;
 
   // Check for rotational invariance
   double angle = 90. * DEG;
   Quaternion q = {.x = sin(angle/2.), .y = 0, .z = 0, .w = cos(angle/2.)};
   rotate_system(q, test);
-  dofulator_calculate(ctx, test->atoms.mass, (const double(*)[3])test->atoms.x);
+  ++iter;
+  err = dofulator_calculate(ctx, test->atoms.mass, (const double(*)[3])test->atoms.x);
+  if (err) {
+    result = false;
+    goto cleanup;
+  }
   result &= check_result(ctx, test, result);
+  if (!result) goto cleanup;
 
   // Cover 180 degree rotation
   rotate_system(q, test);
-  dofulator_calculate(ctx, test->atoms.mass, (const double(*)[3])test->atoms.x);
+  ++iter;
+  err = dofulator_calculate(ctx, test->atoms.mass, (const double(*)[3])test->atoms.x);
+  if (err) {
+    result = false;
+    goto cleanup;
+  }
   result &= check_result(ctx, test, result);
+  if (!result) goto cleanup;
 
   // Non-90 degree rotation
   angle = 30. * DEG;
   q = (Quaternion){.x = 0, .y = cos(30*DEG)*sin(angle/2.), .z = sin(30*DEG)*sin(angle/2.), .w = cos(angle/2.)};
   rotate_system(q, test);
-  dofulator_calculate(ctx, test->atoms.mass, (const double(*)[3])test->atoms.x);
+  ++iter;
+  err = dofulator_calculate(ctx, test->atoms.mass, (const double(*)[3])test->atoms.x);
+  if (err) {
+    result = false;
+    goto cleanup;
+  }
   result &= check_result(ctx, test, result);
 
+cleanup:
   dofulator_destroy(&ctx);
+  if (err) {
+    printf("\t! Failure with error code: %d\n", err);
+  }
+  if (!result && iter) printf("\t! Failure occurred on iteration %ld\n", iter);
   return result;
 }
 

@@ -992,7 +992,7 @@ static inline DofulatorResult dofulator_calculate_semirigid(Dofulator ctx, const
       if (frag->n_loops > 0) {
         const lapack_int n_loops = frag->n_loops;
         const lapack_int n_modes = 3*n_atoms;
-        double (*K)[frag->n_loops][3*n_atoms] = (double(*)[frag->n_loops][n_modes])mJ;
+        double (*K)[frag->n_loops][n_modes] = (double(*)[frag->n_loops][n_modes])mJ;
         for (size_t k = 0; k < frag->n_loops; ++k) {
           const Bond b = frag->loop_closures[k];
           const size_t i = ctx->atom_frag_idx[b.ai];
@@ -1012,8 +1012,12 @@ static inline DofulatorResult dofulator_calculate_semirigid(Dofulator ctx, const
         }
 
         // Find null(K) from low singular values of K
+        // Temporarily store singular values in dof_total
+        double* S = frag->dof_total;
+        // Need to zero out S, otherwise dgesvd gives incorrect
+        // results for low singular values
+        memset(S, 0, sizeof(double) * n_modes);
         double work_query;
-        double* S = frag->dof_total;  // Temporarily store singular values in dof_total
         lapack_int info = LAPACKE_dgesvd_work(
           LAPACK_ROW_MAJOR,
           'N', // Don't calculate any of U
@@ -1034,8 +1038,6 @@ static inline DofulatorResult dofulator_calculate_semirigid(Dofulator ctx, const
           double* new_ptr = realloc(ctx->svd_working, sizeof(double) * ctx->svd_working_size);
           if (unlikely(!new_ptr)) { return DOF_ALLOC_FAILURE; }
           ctx->svd_working = new_ptr;
-          // TODO: better error handling
-          assert(ctx->svd_working);
         }
         info = LAPACKE_dgesvd_work(
           LAPACK_ROW_MAJOR,
@@ -1052,17 +1054,18 @@ static inline DofulatorResult dofulator_calculate_semirigid(Dofulator ctx, const
         if (unlikely(info)) { return DOF_LAPACK_ERROR; }
 
         // Find rank of null(K)
-        double thresh = ctx->null_space_thresh * frag->dof_total[0];   // Singular values in descending order
+        // Singular values in descending order
+        double thresh = ctx->null_space_thresh * S[0];
         size_t rank_K = 0;
-        while (S[rank_K] > thresh) { ++rank_K; }
+        while (rank_K < (size_t)n_modes && S[rank_K] > thresh) { ++rank_K; }
 
         // Project Jacobian onto null(K).
-        // null(K) = VT[modes:3*n_atoms][..]
+        // null(K) = ( VT[rank_K:3*n_atoms][..] )^T
         cblas_dgemm(
           CblasRowMajor, CblasNoTrans, CblasTrans,
           n_modes, n_modes - rank_K, n_modes,
           1.0, &((*J)[0][0]), n_modes,
-          VT, n_modes,
+          &VT[rank_K * n_modes], n_modes,
           0.0, mJ, n_modes
         );
 

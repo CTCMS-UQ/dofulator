@@ -9,7 +9,12 @@ list(REMOVE_ITEM UNIT_TEST_SRCS ${UNIT_LIB_SRCS})
 add_library(unittest SHARED ${UNIT_LIB_SRCS})
 target_link_libraries(unittest PRIVATE dofulator m)
 target_include_directories(unittest PUBLIC ${INCLUDE_DIRS})
-target_compile_options(unittest PUBLIC "-Wall;-Wextra;-Wpedantic")
+foreach(FLAG IN ITEMS -Wall -Wextra -Wpedantic)
+  check_c_compiler_flag(${FLAG} HAVE_FLAG)
+  if (HAVE_FLAG)
+    target_compile_options(unittest PUBLIC ${FLAG})
+  endif()
+endforeach()
 
 # unit test binaries
 foreach(TEST_NAME IN ITEMS ${UNIT_TEST_SRCS})
