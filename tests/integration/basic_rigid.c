@@ -1,4 +1,4 @@
-#include "unit_test.h"
+#include "integration_test.h"
 
 int main(void) {
   Test basic_rigid[] = {

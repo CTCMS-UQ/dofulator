@@ -1,22 +1,25 @@
-file(GLOB INT_TEST_INPUT ${CMAKE_CURRENT_SOURCE_DIR}/*.xyz)
+# Each test is a .c file.
+# integration_test.c contains the test framework and compiles to a shared library
 
-add_custom_target(inttest_adopt_all)
+file(GLOB INT_TEST_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/*.c)
+file(GLOB TEST_LIB_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/integration_test.c)
+list(REMOVE_ITEM INT_TEST_SRCS ${TEST_LIB_SRCS})
 
-foreach(XYZ IN ITEMS ${INT_TEST_INPUT})
-  get_filename_component(INT_TEST ${XYZ} NAME_WLE)
-  set(INT_TEST_REF ${CMAKE_CURRENT_SOURCE_DIR}/${INT_TEST}.dof)
-  set(INT_TEST_OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${INT_TEST}.dof)
-  # TODO: Make this platform independent
-  add_test(
-    NAME integration::${INT_TEST}
-    COMMAND bash -c "${CMAKE_BINARY_DIR}/dof ${XYZ} -o ${INT_TEST_OUTPUT} && diff ${INT_TEST_REF} ${INT_TEST_OUTPUT}"
-  )
+# shared library
+add_library(inttest SHARED ${TEST_LIB_SRCS})
+target_link_libraries(inttest PRIVATE dofulator m)
+target_include_directories(inttest PUBLIC ${INCLUDE_DIRS})
+foreach(FLAG IN ITEMS -Wall -Wextra -Wpedantic)
+  check_c_compiler_flag(${FLAG} HAVE_FLAG)
+  if (HAVE_FLAG)
+    target_compile_options(inttest PUBLIC ${FLAG})
+  endif()
+endforeach()
 
-  add_custom_target(
-    inttest_adopt_${INT_TEST}
-    DEPENDS dof ${XYZ}
-    USES_TERMINAL
-    COMMAND dof ${XYZ} -o ${INT_TEST_REF}
-  )
-  add_dependencies(inttest_adopt_all inttest_adopt_${INT_TEST})
+# integration test binaries
+foreach(TEST_NAME IN ITEMS ${INT_TEST_SRCS})
+  get_filename_component(TEST_BASENAME ${TEST_NAME} NAME_WLE)
+  add_executable(${TEST_BASENAME} ${TEST_NAME})
+  target_link_libraries(${TEST_BASENAME} PRIVATE inttest m)
+  add_test(NAME integration::${TEST_BASENAME} COMMAND ${TEST_BASENAME})
 endforeach()

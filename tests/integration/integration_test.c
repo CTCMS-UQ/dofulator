@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "unit_test.h"
+#include "integration_test.h"
 #include "quaternion.h"
 
 static unsigned digits(unsigned n) {

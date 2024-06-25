@@ -1,7 +1,14 @@
 #include "quaternion.h"
-#include "unit_test.h"
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#define PI 3.14159265378979
+#define DEG (PI/180.0)
+
+inline static bool feql(double a, double b) {
+  return fabs(a - b) < 100.*FLT_EPSILON;
+}
 
 int main(void) {
 
