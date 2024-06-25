@@ -11,7 +11,7 @@ cdef extern from "dofulator.h":
 
     cdef struct Fragment:
         pass
-    
+
     cdef struct FragmentListIter:
         size_t n_fragments
         size_t idx
@@ -41,16 +41,24 @@ cdef extern from "dofulator.h":
         double _pad_yzx[3]
         double _pad_zxy[3]
 
+    cdef enum DofulatorResult:
+        DOF_SUCCESS = 0
+        DOF_UNINITIALISED
+        DOF_ALLOC_FAILURE
+        DOF_INDEX_ERROR
+        DOF_MIXED_RIGID_SEMIRIGID
+        DOF_LAPACK_ERROR
+
     Dofulator dofulator_create(AtomTag n_atoms)
     void dofulator_destroy(Dofulator* ctx)
     void dofulator_set_pbc(Dofulator ctx, PBC pbc)
 
-    void dofulator_add_rigid_bond(Dofulator ctx, Bond b)
-    void dofulator_build_rigid_fragment(Dofulator ctx, Bond b)
-    void dofulator_finalise_fragments(Dofulator ctx)
+    DofulatorResult dofulator_add_rigid_bond(Dofulator ctx, Bond b)
+    DofulatorResult dofulator_build_rigid_fragment(Dofulator ctx, Bond b)
+    DofulatorResult dofulator_finalise_fragments(Dofulator ctx)
 
-    void dofulator_precalculate_rigid(Dofulator ctx, const double* mass, const double x[][3])
-    void dofulator_calculate(Dofulator ctx, const double* mass, const double x[][3])
+    DofulatorResult dofulator_precalculate_rigid(Dofulator ctx, const double* mass, const double x[][3])
+    DofulatorResult dofulator_calculate(Dofulator ctx, const double* mass, const double x[][3])
 
     void dofulator_get_dof_atom_directional(const void* ctx, AtomTag atom_idx, double dof[3])
     double dofulator_get_dof_atom(const void* ctx, AtomTag atom_idx)

@@ -8,6 +8,9 @@
 #include "dofulator.h"
 #include "quaternion.h"
 
+#define likely(x)   __builtin_expect(!!(x), 1)
+#define unlikely(x) __builtin_expect(!!(x), 0)
+
 /*******************************************************************************
  * Single fragment
 */
@@ -78,7 +81,12 @@ static inline Fragment fragment_create(AtomTag n_atoms, bool rigid) {
 */
 static void fragmentlist_destroy(FragmentList* self) {
   if (!self) return;
-  if (self->fragments) free(self->fragments);
+  if (self->fragments) {
+    for (Fragment* frag = self->fragments; frag < self->fragments + self->n_fragments; ++frag) {
+      if (frag->loop_closures) { free(frag->loop_closures); }
+    }
+    free(self->fragments);
+  }
   self->n_fragments = 0;
   self->capacity = 0;
 }
@@ -107,15 +115,15 @@ static inline void fragment_set_max_modes(Fragment* frag) {
  * Add a new fragment with `n_atoms` atoms to `list`.
  * `rigid` should be `true` for rigid fragments, or `false` for semirigid.
 */
-static size_t fragmentlist_add_new(FragmentList* list, size_t n_atoms, bool rigid) {
+typedef struct IndexResult { DofulatorResult status; size_t idx; } IndexResult;
+static IndexResult fragmentlist_add_new(FragmentList* list, size_t n_atoms, bool rigid) {
   // Find the next empty slot
   // Allocate if needed
   if (list->n_fragments >= list->capacity) {
     // List needs to grow, so pick a new capacity and extend it
     list->capacity = list->capacity < 4 ? 4 : list->capacity * 2;
     Fragment* new = realloc(list->fragments, sizeof(Fragment) * list->capacity);
-    // TODO: handle error. Can't just overwrite list->fragments straight away in case realloc fails
-    assert(new);
+    if (unlikely(!new)) { return (IndexResult){DOF_ALLOC_FAILURE, 0}; }
     list->fragments = new;
   }
 
@@ -124,7 +132,7 @@ static size_t fragmentlist_add_new(FragmentList* list, size_t n_atoms, bool rigi
   size_t idx = list->n_fragments++;
   list->fragments[idx] = fragment_create(n_atoms, rigid);
 
-  return idx;
+  return (IndexResult){DOF_SUCCESS, idx};
 }
 
 

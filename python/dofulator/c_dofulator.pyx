@@ -6,13 +6,29 @@ cimport numpy
 numpy.import_array()
 
 cimport dofulator.c_dofulator as dof
-from dofulator.c_dofulator cimport Dofulator, AtomTag, Bond, FragmentListIter, AtomListView
+from dofulator.c_dofulator cimport Dofulator, AtomTag, Bond, FragmentListIter, AtomListView, DofulatorResult
+
+def get_exception(DofulatorResult err):
+    if err == DofulatorResult.DOF_SUCCESS:
+        return None
+    if err == DofulatorResult.DOF_UNINITIALISED:
+        return ValueError("Received uninitialised Dofulator context")
+    if err == DofulatorResult.DOF_ALLOC_FAILURE:
+        return MemoryError("Allocation failed")
+    if err == DofulatorResult.DOF_INDEX_ERROR:
+        return IndexError("Atom index out of range")
+    if err == DofulatorResult.DOF_MIXED_RIGID_SEMIRIGID:
+        return RuntimeError("Cannot link rigid bodies with semi-rigid fragments")
+    if err == DofulatorResult.DOF_LAPACK_ERROR:
+        return RuntimeError("Error during call to LAPACK routine")
 
 cdef class CDofulator:
     cdef Dofulator ctx
     cdef AtomTag n_atoms
     def __cinit__(self, AtomTag n_atoms):
         self.ctx = dof.dofulator_create(n_atoms)
+        if not self.ctx:
+            raise MemoryError("Failed to allocate Dofulator context")
         self.n_atoms = n_atoms
 
     def __dealloc__(self):
@@ -25,9 +41,10 @@ cdef class CDofulator:
         NOTE: make sure `finalise_fragments()` is called once
         all fragments have been built.
         """
-        if i >= self.n_atoms or j >= self.n_atoms:
-            raise IndexError("Atom index out of range")
-        dof.dofulator_add_rigid_bond(self.ctx, Bond(i, j))
+        cdef DofulatorResult err
+        err = dof.dofulator_add_rigid_bond(self.ctx, Bond(i, j))
+        if err != DofulatorResult.DOF_SUCCESS:
+            raise get_exception(err)
 
     def build_rigid_fragment(self, AtomTag i, AtomTag j):
         """
@@ -36,17 +53,20 @@ cdef class CDofulator:
         NOTE: make sure `finalise_fragments()` is called once
         all fragments have been built.
         """
-        if i >= self.n_atoms or j >= self.n_atoms:
-            raise IndexError("Atom index out of range")
-        dof.dofulator_build_rigid_fragment(self.ctx, Bond(i, j))
+        cdef DofulatorResult err
+        err = dof.dofulator_build_rigid_fragment(self.ctx, Bond(i, j))
+        if err != DofulatorResult.DOF_SUCCESS:
+            raise get_exception(err)
 
     def finalise_fragments(self):
         """
         Finalise all rigid and semi-rigid fragments ready for
         DoF calculation.
         """
-        # TODO: Handle C memory errors
-        dof.dofulator_finalise_fragments(self.ctx)
+        cdef DofulatorResult err
+        err = dof.dofulator_finalise_fragments(self.ctx)
+        if err != DofulatorResult.DOF_SUCCESS:
+            raise get_exception(err)
 
     def set_pbc_none(self):
         """
@@ -98,9 +118,12 @@ cdef class CDofulator:
             raise IndexError("x array too short")
         if x.shape[1] != 3:
             raise IndexError("x array must be n_atoms x 3")
-        dof.dofulator_precalculate_rigid(self.ctx,
+        cdef DofulatorResult err
+        err = dof.dofulator_precalculate_rigid(self.ctx,
             cython.cast(cython.pointer(double), mass.data),
             cython.cast(cython.pointer(double[3]), x.data))
+        if err != DofulatorResult.DOF_SUCCESS:
+            raise get_exception(err)
 
     def calculate(
         self,
@@ -119,9 +142,12 @@ cdef class CDofulator:
             raise IndexError("x array too short")
         if x.shape[1] != 3:
             raise IndexError("x array must be n_atoms x 3")
-        dof.dofulator_calculate(self.ctx,
+        cdef DofulatorResult err
+        err = dof.dofulator_calculate(self.ctx,
             cython.cast(cython.pointer(double), mass.data),
             cython.cast(cython.pointer(double[3]), x.data))
+        if err != DofulatorResult.DOF_SUCCESS:
+            raise get_exception(err)
 
     def get_dof(self, AtomTag i):
         """
@@ -181,6 +207,7 @@ cdef class CDofulator:
         cdef AtomTag i
         cdef AtomTag N
         cdef double* buf = cython.cast(cython.pointer(double), buffer.data)
+        # Can ignore result since only throws error if NULL buffer is passed
         if atoms is None:
             dof.dofulator_get_dof_atoms(self.ctx, buffer.shape[0], cython.NULL, buf)
         else:
@@ -216,6 +243,7 @@ cdef class CDofulator:
         cdef AtomTag i
         cdef AtomTag N
         cdef double[3]* buf = cython.cast(cython.pointer(double[3]), buffer.data)
+        # Can ignore result since only throws error if NULL buffer is passed
         if atoms is None:
             dof.dofulator_get_dof_atoms_directional(self.ctx, buffer.shape[0], cython.NULL, buf)
         else:

@@ -86,10 +86,25 @@ typedef struct PBC {
 
 
 /*******************************************************************************
+ * Result type for dofulator functions which may fail
+*/
+__extension__   // Disable warning for [[nodiscard]] attribute being a C23 feature
+typedef enum [[nodiscard]] DofulatorResult {
+  DOF_SUCCESS = 0,              // No error
+  DOF_UNINITIALISED,            // Received unititialised Dofulator context
+  DOF_ALLOC_FAILURE,            // malloc or realloc returned a NULL pointer
+  DOF_INDEX_ERROR,              // Index out of range
+  DOF_MIXED_RIGID_SEMIRIGID,    // Tried to link a rigid body to a semi-rigid fragment
+  DOF_LAPACK_ERROR,             // Error encountered during LAPACK call
+} DofulatorResult;
+
+
+/*******************************************************************************
  * Context management
 */
 
-// Create a dofulator context with space for `n_atoms` atoms
+// Create a dofulator context with space for `n_atoms` atoms.
+// Returns NULL on allocation failure.
 Dofulator dofulator_create(AtomTag n_atoms);
 
 // Clean up a dofulator context.
@@ -106,16 +121,16 @@ void dofulator_set_pbc(Dofulator ctx, PBC pbc);
 
 // Add a rigid bond. This will create/modify/merge semi-rigid fragments as needed.
 // Must call `dofulator_finalise_fragments(ctx)` once all fragments are built.
-void dofulator_add_rigid_bond(Dofulator ctx, Bond b);
+DofulatorResult dofulator_add_rigid_bond(Dofulator ctx, Bond b);
 
 // Mark the two atoms in the bond as being in the same rigid body.
 // Will add/modify/merge rigid fragments as needed.
 // Must call `dofulator_finalise_fragments(ctx)` once all fragments are built.
-void dofulator_build_rigid_fragment(Dofulator ctx, Bond b);
+DofulatorResult dofulator_build_rigid_fragment(Dofulator ctx, Bond b);
 
 // Finalise fragment construction and allocate working memory.
 // No fragments should be added or modified after this point.
-void dofulator_finalise_fragments(Dofulator ctx);
+DofulatorResult dofulator_finalise_fragments(Dofulator ctx);
 
 
 
@@ -127,12 +142,12 @@ void dofulator_finalise_fragments(Dofulator ctx);
 // Assumes mass will be constant through future calculations, and that the geometry in `x`
 // is representative of the rigid bodies (i.e. constraints are respected).
 // May be re-called with updated masses if necessary.
-void dofulator_precalculate_rigid(Dofulator ctx, const double* mass, const double x[][3]);
+DofulatorResult dofulator_precalculate_rigid(Dofulator ctx, const double* mass, const double x[][3]);
 
 // Calculate directional DoF of all atoms in semi-rigid fragments, and relative
 // orientations of rigid bodies (from which directional DoF can be obtained later if needed)
 // Assumes `dofulator_precalculate_rigid()` has been called.
-void dofulator_calculate(Dofulator ctx, const double* mass, const double x[][3]);
+DofulatorResult dofulator_calculate(Dofulator ctx, const double* mass, const double x[][3]);
 
 // Get the total DoF of atom with index `atom_idx`.
 // Assumes `dofulator_calculate()` has been called.
@@ -142,12 +157,18 @@ double dofulator_get_dof_atom(const struct Dofulator* ctx, AtomTag atom_idx);
 // Assumes `dofulator_calculate()` has been called.
 void dofulator_get_dof_atom_directional(const struct Dofulator* ctx, AtomTag atom_idx, double dof[3]);
 
-// Get the total DoF of the `n_atoms` atoms with indices in `atoms`. Returned in `dof`.
+// Get the total DoF of the `n_atoms` atoms with indices in `atoms`. Returned in `dof` and as return value.
+// Allocates `dof` if NULL is passed in.
+// Returns NULL if `dof` is NULL and allocation fails.
+// Returns results for the first n_atoms atoms if `atoms` is NULL.
 // Assumes `dofulator_calculate()` has been called.
 double* dofulator_get_dof_atoms(
   const struct Dofulator* ctx, const size_t n_atoms, const AtomTag* atoms, double* dof);
 
-// Get the directional DoF of the `n_atoms` atoms with indices in `atoms`. Returned in `dof`.
+// Get the directional DoF of the `n_atoms` atoms with indices in `atoms`. Returned in `dof` and as return value.
+// Allocates `dof` if NULL is passed in.
+// Returns NULL if `dof` is NULL and allocation fails.
+// Returns results for the first n_atoms atoms if `atoms` is NULL.
 // Assumes `dofulator_calculate()` has been called.
 double* dofulator_get_dof_atoms_directional(
   const struct Dofulator* ctx, const size_t n_atoms, const AtomTag* atoms, double dof[][3]);

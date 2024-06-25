@@ -19,24 +19,51 @@ int main(int argc, char* argv[]) {
   if (io.in == NULL) goto cleanup;
 
   Molecule mol = parse_molecule_file(io.in);
+  Dofulator ctx = NULL;
+  DofulatorResult err;
   if (mol.atoms.n > 0) {
-    Dofulator ctx = dofulator_create(mol.atoms.n);
+    ctx = dofulator_create(mol.atoms.n);
     if (mol.bonds.n == 0) {
       for (size_t i = 1; i < mol.atoms.n; ++i) {
-        dofulator_build_rigid_fragment(ctx, (Bond){0, i});
+        err = dofulator_build_rigid_fragment(ctx, (Bond){0, i});
+        if (err) {
+          fprintf(stderr, "Fragment building failed with error code %d\n", err);
+          ret = err;
+          goto cleanup;
+        }
       }
     } else {
       for (Bond* b = mol.bonds.bonds; b < mol.bonds.bonds + mol.bonds.n; ++b) {
         if (io.all_rigid) {
-          dofulator_build_rigid_fragment(ctx, *b);
+          err = dofulator_build_rigid_fragment(ctx, *b);
         } else {
-          dofulator_add_rigid_bond(ctx, *b);
+          err = dofulator_add_rigid_bond(ctx, *b);
+        }
+        if (err) {
+          fprintf(stderr, "Fragment building failed with error code %d\n", err);
+          ret = err;
+          goto cleanup;
         }
       }
     }
-    dofulator_finalise_fragments(ctx);
-    dofulator_precalculate_rigid(ctx, mol.atoms.mass, mol.atoms.x);
-    dofulator_calculate(ctx, mol.atoms.mass, mol.atoms.x);
+    err = dofulator_finalise_fragments(ctx);
+    if (err) {
+      fprintf(stderr, "Error finalising fragments: code %d\n", err);
+      ret = err;
+      goto cleanup;
+    }
+    err = dofulator_precalculate_rigid(ctx, mol.atoms.mass, mol.atoms.x);
+    if (err) {
+      fprintf(stderr, "Error precalculating rigid body DoF: code %d\n", err);
+      ret = err;
+      goto cleanup;
+    }
+    err = dofulator_calculate(ctx, mol.atoms.mass, mol.atoms.x);
+    if (err) {
+      fprintf(stderr, "Error calculating DoF: code %d\n", err);
+      ret = err;
+      goto cleanup;
+    }
     if (ctx) {
       fprintf(io.out, "# id\tlabel\tdof_total\tdof_x\t\tdof_y\t\tdof_z\n");
       for (AtomTag i = 0; i < mol.atoms.n; ++i) {
@@ -57,6 +84,7 @@ int main(int argc, char* argv[]) {
 
 cleanup:
   if (io.out != stdout) fclose(io.out);
+  dofulator_destroy(&ctx);
 
   return ret;
 }
