@@ -335,6 +335,17 @@ void dofulator_add_rigid_bond(Dofulator ctx, Bond b) {
         // via `dofulator_get_semirigid_idx(ctx, idx_j)`
         frag_j->invalid = true;
         frag_j->root_atom = idx_i;
+        if (frag_j->n_loops > 0) {
+          // Transfer loop closures across
+          Bond* new_ptr = realloc(frag_i->loop_closures, sizeof(Bond) * (frag_i->n_loops + frag_j->n_loops));
+          if (unlikely(!new_ptr)) { return DOF_ALLOC_FAILURE; }
+          frag_i->loop_closures = new_ptr;
+          memcpy(&frag_i->loop_closures[frag_i->n_loops], frag_j->loop_closures, sizeof(Bond) * frag_j->n_loops);
+          frag_i->n_loops += frag_j->n_loops;
+          frag_j->n_loops = 0;
+          free(frag_j->loop_closures);
+          frag_j->loop_closures = NULL;
+        }
       } else {
         frag_j->n_atoms += frag_i->n_atoms;
         ctx->frag_map[b.ai].idx = idx_j;
