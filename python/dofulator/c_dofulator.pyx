@@ -34,6 +34,21 @@ cdef class CDofulator:
     def __dealloc__(self):
         dof.dofulator_destroy(&self.ctx)
 
+    @property
+    def null_space_thresh(self):
+        """
+        Threshold used to determine the null space of the loop closure matrix.
+        `thresh` is multiplied by the largest singular value to determine
+        the smallest singular value below which values are treated as 0.
+        This is equivalent to `rcond` in scipy.linalg.null_space().
+        The set value from this function is `MIN(ABS(thresh), 1.)`
+        """
+        return dof.dofulator_get_null_space_thresh(self.ctx)
+
+    @null_space_thresh.setter
+    def null_space_thresh(self, double thresh):
+        dof.dofulator_set_null_space_thresh(self.ctx, thresh)
+
     def add_rigid_bond(self, AtomTag i, AtomTag j):
         """
         Add a rigid bond constraint between atoms i and j

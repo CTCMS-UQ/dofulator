@@ -127,6 +127,21 @@ void dofulator_set_pbc(Dofulator ctx, PBC pbc) {
   ctx->pbc = pbc;
 }
 
+/*******************************************************************************
+ * Setter for null_space_thresh via opaque handle
+*/
+void dofulator_set_null_space_thresh(Dofulator ctx, double thresh) {
+  thresh = fabs(thresh);
+  ctx->null_space_thresh = thresh < 1. ? thresh : 1.;
+}
+
+/*******************************************************************************
+ * Getter for null_space_thresh via opaque handle
+*/
+double dofulator_get_null_space_thresh(const struct Dofulator* ctx) {
+  return ctx->null_space_thresh;
+}
+
 
 /*******************************************************************************
  * Remap vector `r` to be within +/- 0.5*[lx, ly, lz] if necessary

@@ -21,6 +21,7 @@ class MDADofulator(AnalysisBase):
         rigid_angles: str|Iterable[Angle]|None = None,
         mode: str = 'atomic',
         verbose: bool = True,
+        null_space_thresh: float|None = None,
     ):
         """
         MDAnalysis extension for calculating per-atom degrees of freedom given
@@ -38,14 +39,28 @@ class MDADofulator(AnalysisBase):
         `mode`: `'atomic'|'directional'` sets whether to calculate only the
         total DoF per atom (`atomic`) or the DoF in each Cartesian direction
         ('directional')
+
+        `null_space_thresh`: Threshold for calculating null space of loop closure matrix.
+        Sanitised to be between 0. and 1. using `min(abs(thresh), 1.)`.
+        `None` = use default from core C library (0.001).
         """
         super(MDADofulator, self).__init__(atomgroup.universe.trajectory, verbose=verbose)
         self._atomgroup = atomgroup
         self.mode = mode
+        self.null_space_thresh = null_space_thresh
         self.pbc: bool = atomgroup.universe.dimensions is not None
         self.set_rigid_bodies(rigid_bodies)
         self.set_rigid_bonds(rigid_bonds)
         self.set_rigid_angles(rigid_angles)
+
+    @property
+    def null_space_thresh(self):
+        return self._null_space_thresh
+
+    @null_space_thresh.setter
+    def null_space_thresh(self, thresh: float|None):
+        self._null_space_thresh = min(abs(thresh), 1.) if thresh is not None else None
+
 
     def set_rigid_bodies(self, rigid_bodies: str|ResidueGroup|Iterable[Iterable[Atom]]|None = None):
         """
@@ -119,6 +134,8 @@ class MDADofulator(AnalysisBase):
         if hasattr(self, '_ctx') and self._ctx:
             del self._ctx
         self._ctx = Dofulator(max_ix+1)
+        if self.null_space_thresh is not None:
+            self._ctx.null_space_thresh = self.null_space_thresh
 
         if self._rigid_bodies:
             for b in self._rigid_bodies:

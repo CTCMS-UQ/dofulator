@@ -113,6 +113,15 @@ void dofulator_destroy(Dofulator* ctx);
 // Set current boundary conditions
 void dofulator_set_pbc(Dofulator ctx, PBC pbc);
 
+// Set the threshold used to determine the null space of the loop closure
+// matrix. `thresh` is multiplied by the largest singular value to determine
+// the smallest singular value below which values are treated as 0.
+// The set value from this function is `MIN(ABS(thresh), 1.)`
+void dofulator_set_null_space_thresh(Dofulator ctx, double thresh);
+
+// Get the current threshold used to determine the null space of the loop
+// closure matrix.
+double dofulator_get_null_space_thresh(const struct Dofulator* ctx);
 
 
 /*******************************************************************************

@@ -52,6 +52,8 @@ cdef extern from "dofulator.h":
     Dofulator dofulator_create(AtomTag n_atoms)
     void dofulator_destroy(Dofulator* ctx)
     void dofulator_set_pbc(Dofulator ctx, PBC pbc)
+    void dofulator_set_null_space_thresh(Dofulator ctx, double thresh);
+    double dofulator_get_null_space_thresh(const void* ctx);
 
     DofulatorResult dofulator_add_rigid_bond(Dofulator ctx, Bond b)
     DofulatorResult dofulator_build_rigid_fragment(Dofulator ctx, Bond b)
