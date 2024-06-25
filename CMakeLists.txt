@@ -33,7 +33,15 @@ else()
   add_library(dofulator STATIC ${LIB_SRCS})
 endif()
 target_include_directories(dofulator PRIVATE ${INCLUDE_DIRS})
-target_compile_options(dofulator PRIVATE "-Wall;-Wextra;-Wpedantic")
+
+# Warnings
+include(CheckCCompilerFlag)
+foreach(FLAG IN ITEMS -Wall -Wextra -Wpedantic)
+  check_c_compiler_flag(${FLAG} HAVE_FLAG)
+  if (HAVE_FLAG)
+    target_compile_options(dofulator PRIVATE ${FLAG})
+  endif()
+endforeach()
 
 if (NOT ${DOF_ATOM_TAG_TYPE} EQUAL "")
   message(STATUS "AtomTag type: ${DOF_ATOM_TAG_TYPE}")
