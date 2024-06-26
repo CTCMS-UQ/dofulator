@@ -79,7 +79,7 @@ class MDADofulator(AnalysisBase):
                 self._rigid_bodies = [r.atoms for r in self._atomgroup.residues]
             else:
                 raise ValueError(f'Invalid value "{rigid_bodies}" for argument `rigid_bodies`')
-        elif isinstance(rigid_bodies, list) \
+        elif isinstance(rigid_bodies, list) and len(rigid_bodies) > 0 \
         and (isinstance(rigid_bodies[0], list) or isinstance(rigid_bodies[0], AtomGroup)):
             # List of lists or list of AtomGroups - avoid deep copy
             # Assuming uniform list.
