@@ -63,7 +63,6 @@ install(FILES ${SRC_DIR}/dofulator.h DESTINATION include)
 # Set up cblas and lapacke includes/linkage
 # Default vendor can be overridden by setting BLA_VENDOR
 # OpenBLAS seems to marginally beat MKL in speed for all test cases
-set(BLA_STATIC ON)
 find_package(LAPACK REQUIRED)
 find_package(BLAS REQUIRED)
 
