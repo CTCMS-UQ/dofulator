@@ -10,13 +10,19 @@ endif()
 
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF CACHE BOOL "Use compiler extensions")
+
 set(ENABLE_LTO ON CACHE BOOL "Enable link-time optimisation if supported")
+
 set(ENABLE_TESTING OFF CACHE BOOL "Compile unit and integration tests")
 set(ENABLE_ASAN OFF CACHE BOOL "Add -fsanitize=address -fno-omit-frame-pointer")
 set(ENABLE_UBSAN OFF CACHE BOOL "Add -fsanitize=undefined")
+
 set(DOF_LIBRARY_ONLY OFF CACHE BOOL "Only build the library")
 set(DOF_SHARED_LIB OFF CACHE BOOL "Build library as shared. Default is static.")
 set(DOF_ATOM_TAG_TYPE "int64_t" CACHE STRING "Integer data type for atom identifiers. Default int64_t required for compatibility with python wrapper.")
+
+set(FORCE_CBLAS_INCLUDE "" CACHE STRING "Override name of cblas header to include")
+set(FORCE_LAPACKE_INCLUDE "" CACHE STRING "Override name of lapacke header to include")
 
 set(SRC_DIR ${PROJECT_SOURCE_DIR}/src)
 set(INCLUDE_DIRS ${INCLUDE_DIRECTORIES} ${SRC_DIR})
@@ -56,19 +62,43 @@ install(FILES ${SRC_DIR}/dofulator.h DESTINATION include)
 ################################################################################
 # Set up cblas and lapacke includes/linkage
 # Default vendor can be overridden by setting BLA_VENDOR
-# OpenBLAS seems to beat MKL in speed for all test cases
+# OpenBLAS seems to marginally beat MKL in speed for all test cases
 set(BLA_STATIC ON)
 find_package(LAPACK REQUIRED)
 find_package(BLAS REQUIRED)
 
-if (BLA_VENDOR STREQUAL OpenBLAS)
-  set(INCLUDE_CBLAS "openblas/cblas.h")
-  set(INCLUDE_LAPACKE "openblas/lapacke.h")
+# Detect found vendor
+set(DETECTED_VENDOR "Unknown")
+foreach (BLIB ${BLAS_LIBRARIES})
+  if (${BLIB} MATCHES openblas)
+    set(DETECTED_VENDOR "OpenBLAS")
+    break()
+  elseif (${BLIB} MATCHES mkl)
+    set(DETECTED_VENDOR "MKL")
+    break()
+  endif()
+endforeach()
+message(STATUS "Detected BLAS vendor: ${DETECTED_VENDOR}")
+
+macro(set_cblas_lapacke_headers CBLAS LAPACKE)
+  if (FORCE_CBLAS_INCLUDE STREQUAL "")
+    set(INCLUDE_CBLAS ${CBLAS})
+  else()
+    set(INCLUDE_CBLAS ${FORCE_CBLAS_INCLUDE})
+  endif()
+  if (FORCE_LAPACKE_INCLUDE STREQUAL "")
+    set(INCLUDE_LAPACKE ${LAPACKE})
+  else()
+    set(INCLUDE_LAPACKE ${FORCE_LAPACKE_INCLUDE})
+  endif()
+endmacro()
+
+if (DETECTED_VENDOR STREQUAL OpenBLAS)
+  set_cblas_lapacke_headers("openblas/cblas.h" "openblas/lapacke.h")
   target_compile_definitions(dofulator PRIVATE BLA_VENDOR_OPENBLAS)
-elseif (BLA_VENDOR MATCHES "[(Intel)(Intel10_32)(Intel10_64lp)(Intel10_64lp_seq)(Intel10_64ilp)(Intel10_64ilp_seq)(Intel10_64_dyn)]")
+elseif (DETECTED_VENDOR STREQUAL MKL)
   find_package(MKL CONFIG REQUIRED PATHS $ENV{MKLROOT})
-  set(INCLUDE_CBLAS "mkl_cblas.h")
-  set(INCLUDE_LAPACKE "mkl_lapacke.h")
+  set_cblas_lapacke_headers("mkl_cblas.h" "mkl_lapacke.h")
   target_compile_options(dofulator PUBLIC $<TARGET_PROPERTY:MKL::MKL,INTERFACE_COMPILE_OPTIONS>)
   target_compile_definitions(dofulator PRIVATE MKL_EXTENSIONS)
   target_include_directories(dofulator PUBLIC $<TARGET_PROPERTY:MKL::MKL,INTERFACE_INCLUDE_DIRECTORIES>)
@@ -76,11 +106,11 @@ elseif (BLA_VENDOR MATCHES "[(Intel)(Intel10_32)(Intel10_64lp)(Intel10_64lp_seq)
 else()
   message(WARNING
     "Unsupported BLAS/LAPACK vendor - may not be able to find headers."
-    "If compilation fails, try pointing INCLUDE_DIRECTORIES to the include directory of the BLAS/LAPACK implementations."
+    "If compilation fails, try pointing INCLUDE_DIRECTORIES to the include directory of the BLAS/LAPACK implementations"
+    "and/or setting FORCE_CBLAS_INCLUDE and FORCE_LAPACKE_INCLUDE to the correct header file names for the implementation."
     "Alternatively, you can set BLA_VENDOR to use a different BLAS/LAPACK implementation."
   )
-  set(INCLUDE_CBLAS "cblas.h")
-  set(INCLUDE_LAPACKE "lapacke.h")
+  set_cblas_lapacke_headers("cblas.h" "lapacke.h")
 endif()
 
 configure_file(${SRC_DIR}/cblas_lapacke.in.h ${CMAKE_BINARY_DIR}/cblas_lapacke.h @ONLY USE_SOURCE_PERMISSIONS)
