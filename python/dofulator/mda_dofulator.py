@@ -3,7 +3,7 @@ from typing import Iterable
 
 import MDAnalysis as mda
 from MDAnalysis.lib import mdamath
-from MDAnalysis.core.groups import ResidueGroup
+from MDAnalysis.core.groups import AtomGroup, Residue, ResidueGroup
 from MDAnalysis.core.topologyobjects import Angle, Bond
 from MDAnalysis.core.universe import Atom
 from MDAnalysis.analysis.base import AnalysisBase
@@ -15,7 +15,7 @@ from .c_dofulator import CDofulator as Dofulator
 class MDADofulator(AnalysisBase):
     def __init__(
         self,
-        atomgroup: mda.AtomGroup,
+        atomgroup: AtomGroup,
         rigid_bodies: str|ResidueGroup|Iterable[Iterable[Atom]]|None = None,
         rigid_bonds: str|Iterable[Bond]|None = None,
         rigid_angles: str|Iterable[Angle]|None = None,
@@ -62,7 +62,7 @@ class MDADofulator(AnalysisBase):
         self._null_space_thresh = min(abs(thresh), 1.) if thresh is not None else None
 
 
-    def set_rigid_bodies(self, rigid_bodies: str|ResidueGroup|Iterable[Iterable[Atom]]|None = None):
+    def set_rigid_bodies(self, rigid_bodies: str|ResidueGroup|Iterable[Residue|Iterable[Atom]]|None = None):
         """
         Set the list of rigid bodies.
         Rigid bodies must not be connected to semi-rigid fragments by any rigid constraints.
@@ -74,18 +74,23 @@ class MDADofulator(AnalysisBase):
               within a unique rigid body. Any atom that appears in multiple rigid bodies will
               result in those bodies being joined.
         """
-        if type(rigid_bodies) is str:
+        if isinstance(rigid_bodies, str):
             if rigid_bodies == 'all':
-                self._rigid_bodies = [[a for a in r.atoms] for r in self._atomgroup.residues]
+                self._rigid_bodies = [r.atoms for r in self._atomgroup.residues]
             else:
                 raise ValueError(f'Invalid value "{rigid_bodies}" for argument `rigid_bodies`')
-        elif type(rigid_bodies) is ResidueGroup:
-            self._rigid_bodies = [[a for a in r.atoms] for r in rigid_bodies]
-        elif type(rigid_bodies) is list and (type(rigid_bodies[0] is list) or type(rigid_bodies[0]) is mda.AtomGroup):
-            # Avoid deep copy of list
+        elif isinstance(rigid_bodies, list) \
+        and (isinstance(rigid_bodies[0], list) or isinstance(rigid_bodies[0], AtomGroup)):
+            # List of lists or list of AtomGroups - avoid deep copy
+            # Assuming uniform list.
             self._rigid_bodies = rigid_bodies
         else:
-            self._rigid_bodies = [[a for a in r] for r in rigid_bodies] if rigid_bodies else None
+            # Generator expression or something else unknown
+            #   - check for Residues, or otherwise assume an atom list
+            self._rigid_bodies = [
+                    [a for a in (r.atoms if isinstance(r, Residue) else r)]
+                    for r in rigid_bodies
+            ] if rigid_bodies else None
 
     def set_rigid_bonds(self, rigid_bonds: str|Iterable[Bond]|None = None):
         """
@@ -96,12 +101,12 @@ class MDADofulator(AnalysisBase):
             * `'all'` treats every bond in the atomgroup as rigid.
             * Anything else is iterated over, with each item expected to be of type `Bond`.
         """
-        if type(rigid_bonds) is str:
+        if isinstance(rigid_bonds, str):
             if rigid_bonds == 'all':
                 self._rigid_bonds = self._atomgroup.bonds
             else:
                 raise ValueError(f'Invalid value "{rigid_bonds}" for argument `rigid_bonds`')
-        elif type(rigid_bonds) is list:
+        elif isinstance(rigid_bonds, list):
             # Avoid deep copy of list
             self._rigid_bonds = rigid_bonds
         else:
@@ -114,12 +119,12 @@ class MDADofulator(AnalysisBase):
         bonds forming each angle are also rigid. This behaviour may be
         relaxed in future versions.
         """
-        if type(rigid_angles) is str:
+        if isinstance(rigid_angles, str):
             if rigid_angles == 'all':
                 self._rigid_angles = self._atomgroup.angles
             else:
                 raise ValueError(f'Invalid value "{rigid_angles}" for argument `rigid_angles`')
-        elif type(rigid_angles) is list:
+        elif isinstance(rigid_angles, list):
             # Avoid deep copy of list
             self._rigid_angles = rigid_angles
         else:
