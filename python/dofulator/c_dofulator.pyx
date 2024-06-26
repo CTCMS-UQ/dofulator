@@ -216,7 +216,8 @@ cdef class CDofulator:
         if buffer.shape[0] < N:
             raise IndexError("`buffer` must have space for at least as many items in `atoms`")
         self._get_all_dof(atoms, buffer)
-        return buffer
+        # Return slice of buffer in case it was longer than N
+        return buffer[:N]
 
     def _get_all_dof(self, numpy.ndarray[numpy.int64_t,ndim=1] atoms, numpy.ndarray[numpy.float64_t,ndim=1] buffer):
         cdef AtomTag i
@@ -252,7 +253,8 @@ cdef class CDofulator:
         if buffer.shape[1] != 3 or buffer.shape[0] < N:
             raise IndexError("`buffer` must have at least as many rows as `atoms`, and exactly 3 columns")
         self._get_all_dof_directional(atoms, buffer)
-        return buffer
+        # Return slice of buffer in case it was longer than N
+        return buffer[:N,:]
 
     def _get_all_dof_directional(self, numpy.ndarray[numpy.int64_t,ndim=1] atoms, numpy.ndarray[numpy.float64_t,ndim=2,mode='c'] buffer):
         cdef AtomTag i
