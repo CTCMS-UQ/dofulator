@@ -93,7 +93,19 @@ macro(set_cblas_lapacke_headers CBLAS LAPACKE)
 endmacro()
 
 if (DETECTED_VENDOR STREQUAL OpenBLAS)
+  # Some package managers put openblas headers under a prefix, so detect that
   set_cblas_lapacke_headers("openblas/cblas.h" "openblas/lapacke.h")
+  try_compile(OPENBLAS_PREFIX_INCLUDE
+    SOURCE_FROM_CONTENT
+      openblas_test.c
+      "#include <${INCLUDE_CBLAS}>\n#include <${INCLUDE_LAPACKE}>\nint main(void) {}"
+    NO_CACHE
+    LINK_LIBRARIES ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES}
+    LINK_OPTIONS ${BLAS_LINKER_FLAGS} ${LAPACK_LINKER_FLAGS}
+  )
+  if (NOT OPENBLAS_PREFIX_INCLUDE)
+    set_cblas_lapacke_headers("cblas.h" "lapacke.h")
+  endif()
   target_compile_definitions(dofulator PRIVATE BLA_VENDOR_OPENBLAS)
 elseif (DETECTED_VENDOR STREQUAL MKL)
   find_package(MKL CONFIG REQUIRED PATHS $ENV{MKLROOT})
