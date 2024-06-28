@@ -1070,7 +1070,9 @@ static inline DofulatorResult dofulator_calculate_semirigid(Dofulator ctx, const
 
         // Find rank of null(K)
         // Singular values in descending order
-        double thresh = ctx->null_space_thresh * S[0];
+        // Take max with a small cut-off in case all loop closures
+        // are redundant constraints
+        double thresh = MAX(ctx->null_space_thresh * S[0], 100 * DBL_EPSILON);
         size_t rank_K = 0;
         while (rank_K < (size_t)n_modes && S[rank_K] > thresh) { ++rank_K; }
 
