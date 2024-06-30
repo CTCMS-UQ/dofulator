@@ -26,8 +26,12 @@ A particular blas implementation can be chosen on installation, for example to c
 ```bash
 $ python -m pip install . --config-settings=cmake.define.BLA_VENDOR=OpenBLAS
 ```
-See the [FindBlas](https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors)
+See the [FindBLAS](https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors)
 documentation for details of other vendor options.
+
+If your BLAS implementation uses odd names for the `cblas.h` or `lapacke.h` headers, you
+can set these directly with the flags `--config-settings=cmake.define.FORCE_CBLAS_INCLUDE=my_cblas.h`
+and `--config-settings=cmake.define.FORCE_LAPECKE_INCLUDE=my_lapacke.h`.
 
 ## MDAnalysis
 
