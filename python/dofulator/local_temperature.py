@@ -47,7 +47,7 @@ class LocalTemperature(AnalysisBase):
 
     def _single_frame(self):
         if self.dofulator is not None:
-            self._dof_buf = np.zeros((max((np.max(sel.ix) for sel in self.selections if len(sel) > 0)),))
+            self._dof_buf = np.zeros((max((sel.n_atoms for sel in self.selections)),))
             if self.store_dof_results:
                 self.dofulator._frame_index = self._frame_index
                 self.dofulator._single_frame()
