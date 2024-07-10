@@ -173,7 +173,11 @@ double dofulator_get_dof_atom(const struct Dofulator* ctx, AtomTag atom_idx);
 
 // Get the directional DoF of atom with index `atom_idx` (returned in `dof` as `{x,y,z}`).
 // Assumes `dofulator_calculate()` has been called.
-void dofulator_get_dof_atom_directional(const struct Dofulator* ctx, AtomTag atom_idx, double dof[3]);
+void dofulator_get_dof_atom_directional(
+  const struct Dofulator* restrict ctx,
+  AtomTag atom_idx,
+  double dof[restrict 3]
+);
 
 // Get the total DoF of the `n_atoms` atoms with indices in `atoms`. Returned in `dof` and as return value.
 // Allocates `dof` if NULL is passed in.
@@ -181,7 +185,10 @@ void dofulator_get_dof_atom_directional(const struct Dofulator* ctx, AtomTag ato
 // Returns results for the first n_atoms atoms if `atoms` is NULL.
 // Assumes `dofulator_calculate()` has been called.
 double* dofulator_get_dof_atoms(
-  const struct Dofulator* ctx, const size_t n_atoms, const AtomTag* atoms, double* dof);
+  const struct Dofulator* restrict ctx, const size_t n_atoms,
+  const AtomTag* restrict atoms,
+  double* restrict dof
+);
 
 // Get the directional DoF of the `n_atoms` atoms with indices in `atoms`. Returned in `dof` and as return value.
 // Allocates `dof` if NULL is passed in.
@@ -189,7 +196,11 @@ double* dofulator_get_dof_atoms(
 // Returns results for the first n_atoms atoms if `atoms` is NULL.
 // Assumes `dofulator_calculate()` has been called.
 double* dofulator_get_dof_atoms_directional(
-  const struct Dofulator* ctx, const size_t n_atoms, const AtomTag* atoms, double dof[][3]);
+  const struct Dofulator* restrict ctx,
+  const size_t n_atoms,
+  const AtomTag* restrict atoms,
+  double dof[restrict][3]
+);
 
 
 
