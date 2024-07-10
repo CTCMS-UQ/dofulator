@@ -19,6 +19,15 @@ extern "C" {
 #define DOFULATOR_DEFAULT_BATCH_SIZE 1
 #endif
 
+#ifdef HAS_NODISCARD
+// __extension__ to disable warning for [[nodiscard]] attribute being a C23 feature
+#define EXTENSION __extension__
+#define NODISCARD [[nodiscard]]
+#else
+#define EXTENSION
+#define NODISCARD
+#endif
+
 /*******************************************************************************
  * Opaque handle to dofulator context
 */
@@ -88,8 +97,8 @@ typedef struct PBC {
 /*******************************************************************************
  * Result type for dofulator functions which may fail
 */
-__extension__   // Disable warning for [[nodiscard]] attribute being a C23 feature
-typedef enum [[nodiscard]] DofulatorResult {
+EXTENSION
+typedef enum NODISCARD DofulatorResult {
   DOF_SUCCESS = 0,              // No error
   DOF_UNINITIALISED,            // Received unititialised Dofulator context
   DOF_ALLOC_FAILURE,            // malloc or realloc returned a NULL pointer

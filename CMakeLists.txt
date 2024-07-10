@@ -132,6 +132,19 @@ target_link_options(dofulator PRIVATE ${BLAS_LINKER_FLAGS} ${LAPACK_LINKER_FLAGS
 
 
 ################################################################################
+# Check for [[nodiscard]] compiler extension
+try_compile(SUPPORT_NODISCARD
+  SOURCE_FROM_CONTENT
+    nodiscard_test.c
+    "__extension__ typedef enum [[nodiscard]] Test { T1, T2 } Test; int main(void) { return T1; }"
+  NO_CACHE
+)
+if (SUPPORT_NODISCARD)
+  target_compile_definitions(dofulator PRIVATE HAS_NODISCARD)
+endif()
+
+
+################################################################################
 # Address/UB sanitization
 if (ENABLE_ASAN)
   target_link_libraries(dofulator PUBLIC -fsanitize=address -fno-omit-frame-pointer)
