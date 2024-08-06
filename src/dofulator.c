@@ -732,7 +732,7 @@ static DofulatorResult fragment_solve_dof(Dofulator ctx, Fragment* frag, double*
   // Modal inertia = Q^T J^T M J Q
   // For mode m:
   //           I_m = lambda_m Q_m^T Q_m
-  //               = lambda_m (eigenvalue m)
+  //               = lambda_m (= eigenvalue m)
 
   // Store the full transform M^1/2 J Q for later to get per-atom modal inertia
   cblas_dgemm(
@@ -745,12 +745,14 @@ static DofulatorResult fragment_solve_dof(Dofulator ctx, Fragment* frag, double*
   // Calculate directional DoF per atom per mode
   for (size_t r = 0; r < 3*n_atoms; ++r) {
     for (size_t m = 0; m < frag->n_modes; ++m) {
-      // TODO: blas routine for this?
       frag->dof[r*row_stride + m] *= frag->dof[r*row_stride + m];
     }
   }
+
+  // Disregard modes with inertia less than a small fraction of the largest inertia
+  double Ithresh = Itotal[frag->n_modes-1] * DBL_EPSILON;
   for (size_t m = 0; m < frag->n_modes; ++m) {
-    const double Iinv = Itotal[m] > 100. * DBL_EPSILON ? 1. / Itotal[m] : 0.;
+    const double Iinv = Itotal[m] > Ithresh ? 1. / Itotal[m] : 0.;
     cblas_dscal(3*n_atoms, Iinv, &frag->dof[m], row_stride);
   }
 
