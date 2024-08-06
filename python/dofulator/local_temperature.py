@@ -11,21 +11,27 @@ class LocalTemperature(AnalysisBase):
         self,
         selections: Iterable[mda.AtomGroup],
         dofulator: MDADofulator|None = None,
-        verbose: bool = True,
         store_dof_results: bool = False,
+        verbose: bool = True,
     ):
         """
         MDAnalysis extension for calculating temperatures of groups of atoms.
+        Assumes kinetic energy of each atom is commensurate with constraints.
 
-        `selections` contains a list of AtomGroups, each of which will have
-        its temperature calculated on each frame.
+        `selections`: a list of AtomGroups, each of which will have
+        its temperature calculated on each frame. For spatial selections,
+        make sure to set `updating=True` in the `AtomGroup`.
 
-        Uses MDADofulator to calculate DoF in each group.
-        AtomGroup used to construct `dofulator` should cover all atoms which
-        may be in any of the groups in `selections`.
-        If the direct results from `dofulator` are also required, set
-        `store_dof_results = True`. Otherwise, they will be discarded after
-        each frame.
+        `dofulator`: Can be a list of DoF values for all atoms in the
+        `Universe`, or an `MDADofulator`, in which case it should cover
+        all atoms which could be in any of the groups in `selections`.
+
+        `store_dof_results`: (default False) Set `True` if the direct results
+        from `dofulator` are also required otherwise, they will be discarded
+        after each frame.
+
+        Note: If MDAnalysis incorrectly guesses velocity units, the `boltz` member may
+        need to be modified.
         """
         if type(selections) is list:
             self.selections = selections
@@ -63,7 +69,7 @@ class LocalTemperature(AnalysisBase):
                 dof = np.sum(self.dofulator._ctx.get_all_dof(sel.ix, self._dof_buf))
             # Calculate m*v*v / d. Apply Boltzmann factor later.
             self.results[self._frame_index, i] = np.sum(
-                sel.masses * np.sum(sel.velocities * sel.velocities, axis=1)
+                sel.masses * np.sum(sel.velocities**2, axis=1)
             ) / dof
 
     def _conclude(self):
