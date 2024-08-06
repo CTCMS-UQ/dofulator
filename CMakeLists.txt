@@ -38,7 +38,7 @@ else()
   message(STATUS "Building dofulator backend as static library")
   add_library(dofulator STATIC ${LIB_SRCS})
 endif()
-target_include_directories(dofulator PRIVATE ${INCLUDE_DIRS})
+target_include_directories(dofulator BEFORE PRIVATE ${INCLUDE_DIRS})
 
 # Warnings
 include(CheckCCompilerFlag)
@@ -125,7 +125,7 @@ else()
 endif()
 
 configure_file(${SRC_DIR}/cblas_lapacke.in.h ${CMAKE_BINARY_DIR}/cblas_lapacke.h @ONLY USE_SOURCE_PERMISSIONS)
-target_include_directories(dofulator PRIVATE ${CMAKE_BINARY_DIR})
+target_include_directories(dofulator BEFORE PRIVATE ${CMAKE_BINARY_DIR})
 
 target_link_libraries(dofulator PRIVATE m ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES})
 target_link_options(dofulator PRIVATE ${BLAS_LINKER_FLAGS} ${LAPACK_LINKER_FLAGS})
@@ -160,7 +160,7 @@ endif()
 if (NOT DOF_LIBRARY_ONLY)
   file(GLOB EXE_SRCS ${SRC_DIR}/frontend/*.c)
   add_executable(dof ${EXE_SRCS})
-  target_include_directories(dof PRIVATE ${SRC_DIR})
+  target_include_directories(dof BEFORE PRIVATE ${SRC_DIR})
   target_link_libraries(dof PRIVATE dofulator m)
 endif()
 
