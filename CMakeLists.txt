@@ -42,7 +42,7 @@ target_include_directories(dofulator BEFORE PRIVATE ${INCLUDE_DIRS})
 
 # Warnings
 include(CheckCCompilerFlag)
-foreach(FLAG IN ITEMS -Wall -Wextra -Wpedantic)
+foreach(FLAG IN ITEMS -Wall -Wextra -Wpedantic -fPIC)
   check_c_compiler_flag(${FLAG} HAVE_FLAG)
   if (HAVE_FLAG)
     target_compile_options(dofulator PRIVATE ${FLAG})
