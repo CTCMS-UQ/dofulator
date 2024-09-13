@@ -15,12 +15,13 @@ int parse_args(int argc, char* argv[], IO* io);
 
 int main(int argc, char* argv[]) {
   IO io;
-  int ret = parse_args(argc, argv, &io);
-  if (io.in == NULL) goto cleanup;
-
-  Molecule mol = parse_molecule_file(io.in);
   Dofulator ctx = NULL;
   DofulatorResult err;
+
+  int ret = parse_args(argc, argv, &io);
+  if (io.in == NULL) goto cleanup;
+  Molecule mol = parse_molecule_file(io.in);
+
   if (mol.atoms.n > 0) {
     ctx = dofulator_create(mol.atoms.n);
     if (mol.bonds.n == 0) {
@@ -92,13 +93,20 @@ cleanup:
 
 int parse_args(int argc, char* argv[], IO* io) {
   const char* USAGE =
-    "Calculates total and directional degrees of freedom"
-    "per atom, given a (modified) .xyz file format.\n"
-    "\n"
     "USAGE:\n"
-    "  dof   INPUT_FILE [-o/--output OUTPUT_FILE] [-h/--help]]\n"
+    "  %s INPUT_FILE [-o/--output OUTPUT_FILE] [--all-rigid-mols] [-h/--help]]\n"
     "\n"
-    "FORMAT:\n"
+    "Calculates total and directional degrees of freedom"
+    "per atom, given a (modified) .xyz file.\n"
+    "\n"
+    " ARG              DESCRIPTION\n"
+    "  -o/--output      Name of output file. Will contain the total, x, y,\n"
+    "                   and z DoF of each atom. Prints to stdout if not set.\n"
+    "\n"
+    "  --all-rigid-mols Treat all molecules (atoms connected by at least 1 bond)\n"
+    "                   as rigid bodies.\n"
+    "\n"
+    "FILE FORMAT:\n"
     "  Input file for rigid molecules should be formatted as below.\n"
     "  Atom labels are optional, and must not exceed 7 characters.\n"
     "  Additional columns/text to the right of the required ones\n"
@@ -115,6 +123,9 @@ int parse_args(int argc, char* argv[], IO* io) {
     "  [num_bonds]\n"
     "  [atom1_id] [atom2_id]\n"
     "  [...]\n"
+    "\n"
+    "  If the bonds section is not present, it is assumed that all\n"
+    "  atoms form a single rigid body (otherwise each would have 3 DoF).\n"
     "\n";
 
   *io = (IO){.in = NULL, .out = stdout, .all_rigid = false};
@@ -134,7 +145,7 @@ int parse_args(int argc, char* argv[], IO* io) {
       io->all_rigid = true;
 
     } else if (strcmp("-h", argv[iarg]) == 0 || strcmp("--help", argv[iarg]) == 0) {
-      fprintf(stdout, "%s", USAGE);
+      fprintf(stdout, USAGE, argv[0]);
       if (io->out != stdout) {
         fclose(io->out);
       }

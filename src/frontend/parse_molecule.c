@@ -32,7 +32,7 @@ Molecule parse_molecule_file(char* fname) {
   }
   out.atoms.n = n;
 
-  // Skip to and of atom number line and then end of description line
+  // Skip to end of atom number line and then end of description line
   if (skip_to_eol(fid) == EOF || skip_to_eol(fid) == EOF) {
     if (feof(fid)) {
       fprintf(stderr, "Unexpected EOF. No atoms present!\n");
