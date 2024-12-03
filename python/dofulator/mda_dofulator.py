@@ -195,6 +195,8 @@ class MDADofulator(AnalysisBase):
             self.results = np.zeros((self.n_frames, self._atomgroup.n_atoms), dtype=np.float64)
         elif self.mode == 'directional':
             self.results = np.zeros((self.n_frames, self._atomgroup.n_atoms, 3), dtype=np.float64)
+        else:
+            raise Exception(f"Invalid mode '{self.mode}'. Must be one of 'atomic' or 'directional'")
         all_atoms = self._atomgroup.universe.atoms
         self._masses = all_atoms.masses.astype(np.float64)  # Assume masses don't change during run
         self._set_ctx_pbc()
