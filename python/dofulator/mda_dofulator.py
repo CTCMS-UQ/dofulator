@@ -52,10 +52,17 @@ class MDADofulator(AnalysisBase):
         self.set_rigid_bodies(rigid_bodies)
         self.set_rigid_bonds(rigid_bonds)
         self.set_rigid_angles(rigid_angles)
+        self.set_rigid_dihedrals(rigid_dihedrals)
 
     @property
     def null_space_thresh(self):
-        return self._null_space_thresh
+        if self._null_space_thresh is not None:
+            return self._null_space_thresh
+        elif hasattr(self, '_ctx') and self._ctx:
+            return self._ctx.null_space_thresh
+        else:
+            # No context constructed yet, so use a dummy one to get the default
+            return Dofulator(0).null_space_thresh
 
     @null_space_thresh.setter
     def null_space_thresh(self, thresh: float|None):
@@ -139,8 +146,8 @@ class MDADofulator(AnalysisBase):
         if hasattr(self, '_ctx') and self._ctx:
             del self._ctx
         self._ctx = Dofulator(max_ix+1)
-        if self.null_space_thresh is not None:
-            self._ctx.null_space_thresh = self.null_space_thresh
+        if self._null_space_thresh is not None:
+            self._ctx.null_space_thresh = self._null_space_thresh
 
         if self._rigid_bodies:
             for b in self._rigid_bodies:
