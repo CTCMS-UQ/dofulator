@@ -30,7 +30,8 @@ struct Dofulator {
   size_t* n_rigid;                // Number of rigid fragments indexed by number of atoms
   size_t max_semirigid_atoms;     // Maximum number of atoms in any semirigid fragment
   size_t max_rigid_atoms;         // Maximum number of atoms in any rigid fragment
-  size_t batch_size;              // Minimum number of fragments to process at once.
+  size_t max_K_size;              // Maximum storage space needed by a K matrix
+  size_t batch_size;              // Minimum number of fragments to process at once. TODO: overhaul working memory allocation to enable proper batching.
   FragmentList semirigid_frags;   // Fragment list, partitioned by Jacobian size (number of atoms)
   FragmentList rigid_frags;       // Fragment list, partitioned by Jacobian size (number of atoms)
   RefFrame* rigid_ref_frames;     // Reference frame for each rigid fragment
@@ -95,6 +96,7 @@ void dofulator_destroy(Dofulator* ctx) {
     free(self->dof_total_buf_semirigid);
   }
   self->max_semirigid_atoms = 0;
+  self->max_K_size = 0;
 
   if (self->dof_buf_rigid) {
     for (double** b = self->dof_buf_rigid; b < self->dof_buf_rigid + self->max_rigid_atoms; ++b) {
@@ -282,7 +284,7 @@ static inline void pbc_wrap_shortest(const PBC* pbc, double r[3]) {
  * Calculate dof[i][m] = mJQ[i][m] mJQ[i][m] / Itotal[m]
  *
  * Storage requirements per batch:
- * - mJ space (Jacobian size)
+ * - mJ space (Jacobian size, or [n_loops * 3*n_atoms] for loop closures)
  * - Q  space (Eigenvector size)
  * - VT space (Jacobian size - semi-rigid only)
  * - WORK space for SVD (pick largest required by any loop-closing fragments)
@@ -290,7 +292,7 @@ static inline void pbc_wrap_shortest(const PBC* pbc, double r[3]) {
 static inline DofulatorResult dofulator_update_batch_size(Dofulator ctx, size_t batch_size) {
   ctx->batch_size = batch_size;
   size_t semirigid_size = 3 * ctx->max_semirigid_atoms * 3 * ctx->max_semirigid_atoms;
-  size_t max_jacobian = MAX( 3 * ctx->max_rigid_atoms * 6, semirigid_size);
+  size_t max_jacobian = MAX(MAX( 3 * ctx->max_rigid_atoms * 6, semirigid_size), ctx->max_K_size);
   size_t max_eigenvector = MAX(36, semirigid_size);
   size_t max_scratch_size_single = max_jacobian + max_eigenvector + semirigid_size;
   ctx->working_buf_size = batch_size * max_scratch_size_single;
@@ -530,6 +532,10 @@ DofulatorResult dofulator_finalise_fragments(Dofulator ctx) {
       memset(&ctx->n_semirigid[ctx->max_semirigid_atoms], 0,
              sizeof(*ctx->n_semirigid) * (frag->n_atoms - ctx->max_semirigid_atoms));
       ctx->max_semirigid_atoms = frag->n_atoms;
+    }
+    // Keep track of largest required K matrix
+    if (frag->n_loops > ctx->max_K_size) {
+      ctx->max_K_size = 3 * frag->n_atoms * frag->n_loops;
     }
     ctx->n_semirigid[frag->n_atoms - 1]++;
     frag->n_atoms = 0; // To be incremented back below
@@ -963,7 +969,7 @@ static inline DofulatorResult dofulator_calculate_semirigid(Dofulator ctx, const
     const AtomTag n_atoms = ctx->semirigid_frags.fragments[ifrag].n_atoms;
     const size_t mat_size = 3*n_atoms * 3*n_atoms;
     double* mJ = ctx->working_buf;
-    double* Q = mJ + mat_size;
+    double* Q = mJ + MAX(mat_size, ctx->max_K_size);
     double* VT = Q + mat_size;
     double rij[3];
     for (size_t f = 0; f < *n_frags; ++f, ++ifrag) {
