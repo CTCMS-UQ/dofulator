@@ -4,7 +4,7 @@ from typing import Iterable
 import MDAnalysis as mda
 from MDAnalysis.lib import mdamath
 from MDAnalysis.core.groups import AtomGroup, Residue, ResidueGroup
-from MDAnalysis.core.topologyobjects import Angle, Bond
+from MDAnalysis.core.topologyobjects import Angle, Bond, Dihedral
 from MDAnalysis.core.universe import Atom
 from MDAnalysis.analysis.base import AnalysisBase
 
@@ -19,6 +19,7 @@ class MDADofulator(AnalysisBase):
         rigid_bodies: str|ResidueGroup|Iterable[Iterable[Atom]]|None = None,
         rigid_bonds: str|Iterable[Bond]|None = None,
         rigid_angles: str|Iterable[Angle]|None = None,
+        rigid_dihedrals: str|Iterable[Dihedral]|None = None,
         mode: str = 'atomic',
         verbose: bool = True,
         null_space_thresh: float|None = None,
@@ -33,8 +34,10 @@ class MDADofulator(AnalysisBase):
         adding a virtual 3rd bond to form a rigid triangle. In future, this may
         be relaxed to allow stretchable bonds with a rigid angle.
 
-        `rigid_bodies`, `rigid_bonds`, `rigid_angles`: see `set_rigid_bodies()`, `set_rigid_bonds()`
-        and `set_rigid_angles()` for details
+        `rigid_bodies`, `rigid_bonds`, `rigid_angles`, `rigid_dihedrals`: Topology groups,
+        lists of topology objects, or `'all'`
+        Sets features to treat as rigid. See `set_rigid_bodies()`, `set_rigid_bonds()`,
+        `set_rigid_angles()` and `set_rigid_dihedrals()` for details.
 
         `mode`: `'atomic'|'directional'` sets whether to calculate only the
         total DoF per atom (`atomic`) or the DoF in each Cartesian direction
@@ -137,6 +140,24 @@ class MDADofulator(AnalysisBase):
         else:
             self._rigid_angles = [a for a in rigid_angles] if rigid_angles else None
 
+    def set_rigid_dihedrals(self, rigid_dihedrals: str|Iterable[Dihedral]|None = None):
+        """
+        Set the list of rigid dihedrals.
+        For simplicity, it is assumed (and automatically enforced) that the
+        bonds and angles within the dihedral are also rigid. This behaviour may be
+        relaxed in future versions.
+        """
+        if isinstance(rigid_dihedrals, str):
+            if rigid_dihedrals == 'all':
+                self._rigid_dihedrals = self._atomgroup.dihedrals
+            else:
+                raise ValueError(f'Invalid value "{rigid_dihedrals}" for argument `rigid_dihedrals`')
+        elif isinstance(rigid_dihedrals, list):
+            # Avoid deep copy of list
+            self._rigid_dihedrals = rigid_dihedrals
+        else:
+            self._rigid_dihedrals = [d for d in rigid_dihedrals] if rigid_dihedrals else None
+
     def _setup_ctx(self):
         """
         Set up the Dofulator context for the current set of rigid bodies, bonds and angles.
@@ -169,6 +190,15 @@ class MDADofulator(AnalysisBase):
                 self._ctx.add_rigid_bond(a.atoms[0].ix, a.atoms[1].ix)
                 self._ctx.add_rigid_bond(a.atoms[0].ix, a.atoms[2].ix)
                 self._ctx.add_rigid_bond(a.atoms[1].ix, a.atoms[2].ix)
+
+        if self._rigid_dihedrals:
+            for d in self._rigid_dihedrals:
+                self._ctx.add_rigid_bond(d.atoms[0].ix, d.atoms[1].ix)
+                self._ctx.add_rigid_bond(d.atoms[0].ix, d.atoms[2].ix)
+                self._ctx.add_rigid_bond(d.atoms[0].ix, d.atoms[3].ix)
+                self._ctx.add_rigid_bond(d.atoms[1].ix, d.atoms[2].ix)
+                self._ctx.add_rigid_bond(d.atoms[1].ix, d.atoms[3].ix)
+                self._ctx.add_rigid_bond(d.atoms[2].ix, d.atoms[3].ix)
 
         self._ctx.finalise_fragments()
 
