@@ -31,3 +31,13 @@ DOF_ATOM_TAG_TYPE = "int64_t"
 DOF_LIBRARY_ONLY = "ON"
 # Base library must be statically linked to cython library
 DOF_SHARED_LIB = "OFF"
+
+[tool.pytest.ini_options]
+minversion = '6.0'
+addopts = [
+  '--import-mode=importlib',
+]
+pythonpath = 'python'
+testpaths = [
+  'tests/python',
+]

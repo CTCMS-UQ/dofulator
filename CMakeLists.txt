@@ -20,6 +20,7 @@ set(ENABLE_UBSAN OFF CACHE BOOL "Add -fsanitize=undefined")
 set(DOF_LIBRARY_ONLY OFF CACHE BOOL "Only build the library")
 set(DOF_SHARED_LIB OFF CACHE BOOL "Build library as shared. Default is static.")
 set(DOF_ATOM_TAG_TYPE "int64_t" CACHE STRING "Integer data type for atom identifiers. Default int64_t required for compatibility with python wrapper.")
+set(DOF_ENABLE_PYTHON ON CACHE BOOL "Enable building/testing of the python interface")
 
 set(FORCE_CBLAS_INCLUDE "" CACHE STRING "Override name of cblas header to include")
 set(FORCE_LAPACKE_INCLUDE "" CACHE STRING "Override name of lapacke header to include")
@@ -186,9 +187,20 @@ endif()
 
 
 ################################################################################
+# Optional python package
+if (DOF_ENABLE_PYTHON)
+  find_package(Python COMPONENTS Interpreter Development.Module NumPy)
+  if (Python_FOUND)
+    message(STATUS "Python package target available")
+    add_subdirectory(python)
+  endif()
+endif()
+
+################################################################################
 # Set up testing
 if (ENABLE_TESTING)
   message(STATUS "Testing: enabled")
+  list(APPEND CMAKE_MESSAGE_INDENT "  ")
   if (ENABLE_ASAN)
     message(STATUS "Address sanitizer in unit tests: enabled")
   else()
@@ -196,15 +208,9 @@ if (ENABLE_TESTING)
   endif()
   include(CTest)
   add_subdirectory(tests)
+  message(STATUS "NOTE: Make sure to build the test_deps target before running ctest!")
+  list(POP_BACK CMAKE_MESSAGE_INDENT)
 else()
   message(STATUS "Testing: disabled")
 endif()
 
-
-################################################################################
-# Optional python package
-find_package(Python COMPONENTS Interpreter Development.Module NumPy)
-if (Python_FOUND)
-  message(STATUS "Python package target available")
-  add_subdirectory(python)
-endif()

@@ -16,4 +16,5 @@ foreach(TEST_NAME IN ITEMS ${UNIT_TEST_SRCS})
   endforeach()
 
   add_test(NAME unit::${TEST_BASENAME} COMMAND ${TEST_BASENAME})
+  add_dependencies(test_deps ${TEST_BASENAME})
 endforeach()
