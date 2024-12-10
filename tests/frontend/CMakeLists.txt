@@ -7,11 +7,16 @@ foreach(XYZ IN ITEMS ${FRONTEND_TEST_INPUT})
   get_filename_component(FRONTEND_TEST ${XYZ} NAME_WLE)
   set(FRONTEND_TEST_REF ${CMAKE_CURRENT_SOURCE_DIR}/${FRONTEND_TEST}.dof)
   set(FRONTEND_TEST_OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${FRONTEND_TEST}.dof)
-  # TODO: Make this platform independent
+  add_test(
+    NAME frontend::run_${FRONTEND_TEST}
+    COMMAND $<TARGET_FILE:dof> ${XYZ} -o ${FRONTEND_TEST_OUTPUT}
+  )
   add_test(
     NAME frontend::${FRONTEND_TEST}
-    COMMAND bash -c "${CMAKE_BINARY_DIR}/dof ${XYZ} -o ${FRONTEND_TEST_OUTPUT} && diff ${FRONTEND_TEST_REF} ${FRONTEND_TEST_OUTPUT}"
+    COMMAND ${CMAKE_COMMAND} -E compare_files ${FRONTEND_TEST_REF} ${FRONTEND_TEST_OUTPUT}
   )
+  set_tests_properties(frontend::run_${FRONTEND_TEST} PROPERTIES FIXTURES_SETUP    f_${FRONTEND_TEST})
+  set_tests_properties(frontend::${FRONTEND_TEST}     PROPERTIES FIXTURES_REQUIRED f_${FRONTEND_TEST})
 
   # Target to write .dof file using current output
   add_custom_target(
