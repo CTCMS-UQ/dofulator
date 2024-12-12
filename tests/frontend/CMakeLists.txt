@@ -17,7 +17,7 @@ foreach(XYZ IN ITEMS ${FRONTEND_TEST_INPUT})
   )
   set_tests_properties(frontend::run_${FRONTEND_TEST} PROPERTIES FIXTURES_SETUP    f_${FRONTEND_TEST})
   set_tests_properties(frontend::${FRONTEND_TEST}     PROPERTIES FIXTURES_REQUIRED f_${FRONTEND_TEST})
-  add_dependencies(test_deps dof)
+  add_dependencies(tests dof)
 
   # Target to write .dof file using current output
   add_custom_target(

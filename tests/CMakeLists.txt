@@ -1,5 +1,5 @@
 # Metatarget for building tests
-add_custom_target(test_deps)
+add_custom_target(tests)
 
 add_subdirectory(unit)
 add_subdirectory(integration)
