@@ -23,6 +23,7 @@ class MDADofulator(AnalysisBase):
         mode: str = 'atomic',
         verbose: bool = True,
         null_space_thresh: float|None = None,
+        use_pbc: bool = True,
     ):
         """
         MDAnalysis extension for calculating per-atom degrees of freedom given
@@ -46,12 +47,14 @@ class MDADofulator(AnalysisBase):
         `null_space_thresh`: Threshold for calculating null space of loop closure matrix.
         Sanitised to be between 0. and 1. using `min(abs(thresh), 1.)`.
         `None` = use default from core C library (0.001).
+        `use_pbc`: `bool` set `False` to ignore periodic boundaries.
         """
         super(MDADofulator, self).__init__(atomgroup.universe.trajectory, verbose=verbose)
         self._atomgroup = atomgroup
         self.mode = mode
         self.null_space_thresh = null_space_thresh
-        self.pbc: bool = atomgroup.universe.dimensions is not None
+        self.use_pbc = use_pbc
+        self.pbc: bool = use_pbc and (atomgroup.universe.dimensions is not None)
         self.set_rigid_bodies(rigid_bodies)
         self.set_rigid_bonds(rigid_bonds)
         self.set_rigid_angles(rigid_angles)
@@ -206,6 +209,10 @@ class MDADofulator(AnalysisBase):
         """
         Update PBCs in dofulator context.
         """
+        if not self.use_pbc:
+            self._ctx.set_pbc_none()
+            return
+
         dimensions = self._atomgroup.universe.dimensions
         if dimensions is None:
             mda.warnings.warn('No dimension data detected. Assuming non-periodic '
