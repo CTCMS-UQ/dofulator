@@ -9,7 +9,7 @@ add_custom_command(
     ${CMAKE_CURRENT_SOURCE_DIR}/dofulator/c_dofulator.pxd
   VERBATIM
   COMMAND
-    Python::Interpreter -m cython ${CMAKE_CURRENT_SOURCE_DIR}/dofulator/c_dofulator.pyx
+    Python::Interpreter -m cython -3 ${CMAKE_CURRENT_SOURCE_DIR}/dofulator/c_dofulator.pyx
     --output-file ${CMAKE_CURRENT_BINARY_DIR}/c_dofulator.c
 )
 
