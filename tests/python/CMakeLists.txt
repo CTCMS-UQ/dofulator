@@ -20,7 +20,8 @@ add_custom_target(
 # Use pytest from venv
 add_test(
   NAME python_tests
-  COMMAND ${VENV_Python} -m pytest ${CMAKE_CURRENT_SOURCE_DIR}
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+  COMMAND ${VENV_Python} -m pytest
 )
 
 # Set up fixture to copy c_dofulator library into source tree/clean it up afterwards for pytest

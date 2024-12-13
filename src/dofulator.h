@@ -126,6 +126,8 @@ void dofulator_set_pbc(Dofulator ctx, PBC pbc);
 // matrix. `thresh` is multiplied by the largest singular value to determine
 // the smallest singular value below which values are treated as 0.
 // The set value from this function is `MIN(ABS(thresh), 1.)`
+// A value of 0.0 will result in the default behaviour of using
+// DBL_EPSILON * the largest dimension of the loop closure matrix.
 void dofulator_set_null_space_thresh(Dofulator ctx, double thresh);
 
 // Get the current threshold used to determine the null space of the loop

@@ -42,6 +42,8 @@ cdef class CDofulator:
         the smallest singular value below which values are treated as 0.
         This is equivalent to `rcond` in scipy.linalg.null_space().
         The set value from this function is `MIN(ABS(thresh), 1.)`
+        A value of 0.0 will result in the default behaviour of using
+        DBL_EPSILON * the largest dimension of the loop closure matrix.
         """
         return dof.dofulator_get_null_space_thresh(self.ctx)
 

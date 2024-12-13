@@ -46,7 +46,8 @@ class MDADofulator(AnalysisBase):
 
         `null_space_thresh`: Threshold for calculating null space of loop closure matrix.
         Sanitised to be between 0. and 1. using `min(abs(thresh), 1.)`.
-        `None` = use default from core C library (0.001).
+        `None|0` = use default from core C library (DBL_EPSILON * largest dimension of loop closure matrix).
+
         `use_pbc`: `bool` set `False` to ignore periodic boundaries.
         """
         super(MDADofulator, self).__init__(atomgroup.universe.trajectory, verbose=verbose)
@@ -190,18 +191,20 @@ class MDADofulator(AnalysisBase):
             for a in self._rigid_angles:
                 # If any of these bonds have already been added, nothing
                 # will change for that bond, so safe to just add all.
+                # Construct bonds first for consistency
                 self._ctx.add_rigid_bond(a.atoms[0].ix, a.atoms[1].ix)
-                self._ctx.add_rigid_bond(a.atoms[0].ix, a.atoms[2].ix)
                 self._ctx.add_rigid_bond(a.atoms[1].ix, a.atoms[2].ix)
+                self._ctx.add_rigid_bond(a.atoms[0].ix, a.atoms[2].ix)
 
         if self._rigid_dihedrals:
             for d in self._rigid_dihedrals:
+                # Construct bonds first, then angles, then dihedral for consistency
                 self._ctx.add_rigid_bond(d.atoms[0].ix, d.atoms[1].ix)
-                self._ctx.add_rigid_bond(d.atoms[0].ix, d.atoms[2].ix)
-                self._ctx.add_rigid_bond(d.atoms[0].ix, d.atoms[3].ix)
                 self._ctx.add_rigid_bond(d.atoms[1].ix, d.atoms[2].ix)
-                self._ctx.add_rigid_bond(d.atoms[1].ix, d.atoms[3].ix)
                 self._ctx.add_rigid_bond(d.atoms[2].ix, d.atoms[3].ix)
+                self._ctx.add_rigid_bond(d.atoms[0].ix, d.atoms[2].ix)
+                self._ctx.add_rigid_bond(d.atoms[1].ix, d.atoms[3].ix)
+                self._ctx.add_rigid_bond(d.atoms[0].ix, d.atoms[3].ix)
 
         self._ctx.finalise_fragments()
 

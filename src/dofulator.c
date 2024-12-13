@@ -42,7 +42,8 @@ struct Dofulator {
   size_t working_buf_size;        // Size of working memory
   double* working_buf;            // Working memory for building Jacobians
   double* svd_working;            // Working memory for SVD/eigenvector calculation (reallocated as necessary)
-  double null_space_thresh;       // Fraction of the maximum singular value below which singular values are treated as 0
+  double null_space_thresh;       // Fraction of the maximum singular value below which singular values are treated as 0.
+                                  // 0.0 = use DBL_EPSILON * max dimension of loop closure matrix.
   lapack_int svd_working_size;    // Size of SVD/eigenvector working memory
   PBC pbc;
 };
@@ -59,7 +60,7 @@ Dofulator dofulator_create(AtomTag n_atoms) {
     .frag_map = (FragIndex*)calloc(n_atoms, sizeof(FragIndex)),
     .predecessors = (AtomTag*)malloc(sizeof(AtomTag) * n_atoms),
     .atom_frag_idx = (size_t*)malloc(sizeof(size_t) * n_atoms),
-    .null_space_thresh = 0.001,   // This seems quite high, but helps with stiff systems
+    .null_space_thresh = 0.0,   // Unlikely to need changes, but expose just in case
   };
   for (AtomTag i = 0; i < n_atoms; ++i) {
     ctx.predecessors[i] = i;
@@ -340,7 +341,11 @@ DofulatorResult dofulator_add_rigid_bond(Dofulator ctx, Bond b) {
     size_t idx_j = dofulator_get_semirigid_idx(ctx, b.aj);
     // Both already in a fragment
     if (idx_i == idx_j) {
-      // Already in same fragment, so this is a loop closure
+      // Already in same fragment, so check if duplicate bond
+      if (ctx->predecessors[b.ai] == b.aj || ctx->predecessors[b.aj] == b.ai) {
+        return DOF_SUCCESS;
+      }
+      // Not duplicate, so this is a loop closure
       Fragment* frag = &ctx->semirigid_frags.fragments[idx_i];
       Bond* new_ptr = realloc(frag->loop_closures, sizeof(Bond) * (frag->n_loops + 1));
       if (unlikely(!new_ptr)) { return DOF_ALLOC_FAILURE; }
@@ -352,31 +357,33 @@ DofulatorResult dofulator_add_rigid_bond(Dofulator ctx, Bond b) {
       Fragment* frag_i = &ctx->semirigid_frags.fragments[idx_i];
       Fragment* frag_j = &ctx->semirigid_frags.fragments[idx_j];
       assert(frag_i->root_atom != frag_j->root_atom);
-      if (frag_i->root_atom < frag_j->root_atom) {
-        frag_i->n_atoms += frag_j->n_atoms;
-        ctx->frag_map[b.aj].idx = idx_i;
-        // Invalidate frag_j and point it to frag_i
-        // Any other atoms in it will be updated later through this link
-        // via `dofulator_get_semirigid_idx(ctx, idx_j)`
-        frag_j->invalid = true;
-        frag_j->root_atom = idx_i;
-        if (frag_j->n_loops > 0) {
-          // Transfer loop closures across
-          Bond* new_ptr = realloc(frag_i->loop_closures, sizeof(Bond) * (frag_i->n_loops + frag_j->n_loops));
-          if (unlikely(!new_ptr)) { return DOF_ALLOC_FAILURE; }
-          frag_i->loop_closures = new_ptr;
-          memcpy(&frag_i->loop_closures[frag_i->n_loops], frag_j->loop_closures, sizeof(Bond) * frag_j->n_loops);
-          frag_i->n_loops += frag_j->n_loops;
-          frag_j->n_loops = 0;
-          free(frag_j->loop_closures);
-          frag_j->loop_closures = NULL;
-        }
-      } else {
-        frag_j->n_atoms += frag_i->n_atoms;
-        ctx->frag_map[b.ai].idx = idx_j;
-        // Invalidate frag_i and point it to frag_j
-        frag_i->invalid = true;
-        frag_i->root_atom = idx_j;
+      frag_i->n_atoms += frag_j->n_atoms;
+      ctx->frag_map[b.aj].idx = idx_i;
+      // Invalidate frag_j and point it to frag_i
+      // Any other atoms in it will be updated later through this link
+      // via `dofulator_get_semirigid_idx(ctx, idx_j)`
+      frag_j->invalid = true;
+      frag_j->root_atom = (AtomTag)idx_i;
+      if (frag_j->n_loops > 0) {
+        // Transfer loop closures across
+        Bond* new_ptr = realloc(frag_i->loop_closures, sizeof(Bond) * (frag_i->n_loops + frag_j->n_loops));
+        if (unlikely(!new_ptr)) { return DOF_ALLOC_FAILURE; }
+        frag_i->loop_closures = new_ptr;
+        memcpy(&frag_i->loop_closures[frag_i->n_loops], frag_j->loop_closures, sizeof(Bond) * frag_j->n_loops);
+        frag_i->n_loops += frag_j->n_loops;
+        frag_j->n_loops = 0;
+        free(frag_j->loop_closures);
+        frag_j->loop_closures = NULL;
+      }
+      // Reorient tree of frag_j to correct predecessors
+      AtomTag new_pred = b.ai;
+      AtomTag atom = b.aj;
+      AtomTag old_pred = ctx->predecessors[atom];
+       while (atom != new_pred) {
+        ctx->predecessors[atom] = new_pred;
+        new_pred = atom;
+        atom = old_pred;
+        old_pred = ctx->predecessors[atom];
       }
     }
 
@@ -386,10 +393,8 @@ DofulatorResult dofulator_add_rigid_bond(Dofulator ctx, Bond b) {
     size_t idx_i = dofulator_get_semirigid_idx(ctx, b.ai);
     Fragment* frag = &ctx->semirigid_frags.fragments[idx_i];
     frag->n_atoms++;
-    if (b.aj < frag->root_atom) {
-      frag->root_atom = b.aj;
-    }
     ctx->frag_map[b.aj] = (FragIndex){.rigid = false, .has_frag = true, .idx = idx_i};
+    ctx->predecessors[b.aj] = b.ai;
 
   } else if (ctx->frag_map[b.aj].has_frag) {
     if (unlikely(ctx->frag_map[b.aj].rigid)) { return DOF_MIXED_RIGID_SEMIRIGID; }
@@ -397,10 +402,8 @@ DofulatorResult dofulator_add_rigid_bond(Dofulator ctx, Bond b) {
     size_t idx_j = dofulator_get_semirigid_idx(ctx, b.aj);
     Fragment* frag = &ctx->semirigid_frags.fragments[idx_j];
     frag->n_atoms++;
-    if (b.ai < frag->root_atom) {
-      frag->root_atom = b.ai;
-    }
     ctx->frag_map[b.ai] = (FragIndex){.rigid = false, .has_frag = true, .idx = idx_j};
+    ctx->predecessors[b.ai] = b.aj;
 
   } else {
     // Create new fragment with i and j
@@ -410,13 +413,13 @@ DofulatorResult dofulator_add_rigid_bond(Dofulator ctx, Bond b) {
     ctx->frag_map[b.ai] = (FragIndex){.rigid = false, .has_frag = true, .idx = frag_idx};
     ctx->frag_map[b.aj] = (FragIndex){.rigid = false, .has_frag = true, .idx = frag_idx};
     ctx->semirigid_frags.fragments[frag_idx].root_atom = b.ai < b.aj ? b.ai : b.aj;
+    if (b.ai < b.aj) {
+      ctx->predecessors[b.aj] = b.ai;
+    } else {
+      ctx->predecessors[b.ai] = b.aj;
+    }
   }
 
-  if (b.ai < b.aj) {
-    ctx->predecessors[b.aj] = b.ai;
-  } else {
-    ctx->predecessors[b.ai] = b.aj;
-  }
   return DOF_SUCCESS;
 }
 
@@ -560,20 +563,69 @@ DofulatorResult dofulator_finalise_fragments(Dofulator ctx) {
   }
 
   // Populate atom lists of all fragments
+  // Zero out frag_idx list to track which atoms have been added to fragments
+  memset(ctx->atom_frag_idx, 0, sizeof(*ctx->atom_frag_idx) * ctx->n_atoms);
+  AtomTag* pred_stack = NULL;
+  if (ctx->max_semirigid_atoms > 1) {
+    pred_stack = malloc(sizeof(*pred_stack) * (ctx->max_semirigid_atoms - 1));
+    if (unlikely(!pred_stack)) { return DOF_ALLOC_FAILURE; }
+  }
   for (AtomTag i = 0; i < ctx->n_atoms; ++i) {
     FragIndex frag_idx = ctx->frag_map[i];
     if (frag_idx.has_frag) {
       Fragment* frag;
       if (frag_idx.rigid) {
+        // Rigid fragment - just add the new atom
         frag = &ctx->rigid_frags.fragments[frag_idx.idx];
+        ctx->atom_frag_idx[i] = frag->n_atoms;
+        frag->atoms[frag->n_atoms++] = i;
       } else {
+
+        // Semirigid fragment - need to make sure predecessors come first in the
+        // fragment's atom list to simplify Jacobian building
         size_t idx = dofulator_get_semirigid_idx(ctx, i);
         frag = &ctx->semirigid_frags.fragments[idx];
+        AtomTag pred = ctx->predecessors[i];
+        if (i == pred) {
+          // This is the root atom. Just skip if already added
+          assert(i == frag->root_atom);
+          if (frag->n_atoms != 0) { continue; }
+
+        } else {
+          // For non-root predecessors, atom_frag_idx will be > 0 once added
+          // to a fragment. Use this to check whether predecessor is already in
+          // a fragment's atom list. Add predecessors back to the root (in
+          // reverse order) if needed so predecessors always come earlier in frag->atoms.
+          size_t stack_idx = 0;
+          while (ctx->atom_frag_idx[pred] == 0) {
+            if (
+              pred == frag->root_atom &&
+              (frag->n_atoms > 0 ||  pred == pred_stack[stack_idx - 1])
+            ) {
+              // Reached the root atom and it's already added or queued, so stop
+              break;
+            }
+            pred_stack[stack_idx++] = pred;
+            pred = ctx->predecessors[pred];
+          }
+          // Walk back down stack and add predecessors up to i
+          while (stack_idx > 0) {
+            AtomTag atom = pred_stack[--stack_idx];
+            ctx->atom_frag_idx[atom] = frag->n_atoms;
+            frag->atoms[frag->n_atoms++] = atom;
+          }
+        }
+        // Add atom i if it's not already in a fragment
+        // Root atoms will have idx 0, but this point is only reached
+        // once per root atom.
+        if (ctx->atom_frag_idx[i] == 0) {
+          ctx->atom_frag_idx[i] = frag->n_atoms;
+          frag->atoms[frag->n_atoms++] = i;
+        }
       }
-      ctx->atom_frag_idx[i] = frag->n_atoms;
-      frag->atoms[frag->n_atoms++] = i;
     }
   }
+  if (pred_stack) { free(pred_stack); }
 
   // Partition fragments by Jacobian size (number of atoms) for batched linalg.
   // Left-over empty fragments are placed at the end to be truncated.
@@ -988,6 +1040,7 @@ static inline DofulatorResult dofulator_calculate_semirigid(Dofulator ctx, const
         } else {
           const AtomTag pred_i = ctx->atom_frag_idx[pred];
           // Copy x,y,z rows from predecessor
+          // Fragment atom list is ordered such that predecessors are always processed first.
           memcpy(&((*J)[3*i][0]), &((*J)[3*pred_i][0]), sizeof(double) * 3*n_atoms * 3);
 
           // Get vector from predecessor to atom i
@@ -1080,7 +1133,13 @@ static inline DofulatorResult dofulator_calculate_semirigid(Dofulator ctx, const
         // Singular values in descending order
         // Take max with a small cut-off in case all loop closures
         // are redundant constraints
-        double thresh = MAX(ctx->null_space_thresh * S[0], 100 * DBL_EPSILON);
+        double thresh;
+        if (likely(ctx->null_space_thresh == 0.0)) {
+          thresh = DBL_EPSILON * MAX(n_modes, n_loops);
+        } else {
+          thresh = ctx->null_space_thresh;
+        }
+        thresh = MAX(thresh * S[0], DBL_EPSILON);
         size_t rank_K = 0;
         while (rank_K < (size_t)n_modes && S[rank_K] > thresh) { ++rank_K; }
 
