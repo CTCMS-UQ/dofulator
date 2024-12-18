@@ -3,6 +3,12 @@
 
 #include "integration_test.h"
 #include "quaternion.h"
+#include "fragment.h"
+
+typedef struct RotationTest {
+  const char* name;
+  Quaternion q;
+} RotationTest;
 
 static unsigned digits(unsigned n) {
   unsigned d = 1;
@@ -40,21 +46,72 @@ bool check_result(Dofulator ctx, Test* test, bool current_result) {
 }
 
 void rotate_system(Quaternion q, Test* test) {
-  double x[3] = {1., 0., 0.};
-  double y[3] = {0., 1., 0.};
-  double z[3] = {0., 0., 1.};
-  double dof[3];
-  quat_rotate_vec(q, x);
-  quat_rotate_vec(q, y);
-  quat_rotate_vec(q, z);
-  for (size_t i = 0; i < test->atoms.n; ++i) {
-    quat_rotate_vec(q, test->atoms.x[i]);
-    dof[0] = test->dof[i][0]*x[0]*x[0] + test->dof[i][1]*y[0]*y[0] + test->dof[i][2]*z[0]*z[0];
-    dof[1] = test->dof[i][0]*x[1]*x[1] + test->dof[i][1]*y[1]*y[1] + test->dof[i][2]*z[1]*z[1];
-    dof[2] = test->dof[i][0]*x[2]*x[2] + test->dof[i][1]*y[2]*y[2] + test->dof[i][2]*z[2]*z[2];
-    test->dof[i][0] = dof[0];
-    test->dof[i][1] = dof[1];
-    test->dof[i][2] = dof[2];
+  Quaternion q_conj = quat_conj(q);
+  // Set up auxiliary system as ground truth.
+  Dofulator ctx = dofulator_create(test->atoms.n);
+  for (Bond* b = test->bonds.bonds; b < test->bonds.bonds + test->bonds.n; ++b) {
+    switch (test->test_type) {
+      case RIGID:
+        dofulator_build_rigid_fragment(ctx, *b);
+        break;
+      case FLEX:
+        dofulator_add_rigid_bond(ctx, *b);
+    }
+  }
+  dofulator_finalise_fragments(ctx);
+
+  // For rigid tests, rotate the system before calculating to check
+  // that rotated DoF calculation is correct
+  if (test->test_type == RIGID) {
+    for (size_t i = 0; i < test->atoms.n; ++i) {
+      quat_rotate_vec(q, test->atoms.x[i]);
+    }
+  }
+  dofulator_precalculate_rigid(ctx, test->atoms.mass, (const double(*)[3])test->atoms.x);
+  dofulator_calculate(ctx, test->atoms.mass, (const double(*)[3])test->atoms.x);
+
+  switch (test->test_type) {
+    case RIGID:
+      // Store result for comparison
+      for (size_t i = 0; i < test->atoms.n; ++i) {
+        dofulator_get_dof_atom_directional(ctx, i, test->dof[i]);
+      }
+      break;
+    case FLEX:;
+      // For flexible tests, rotate the DoF as for rigid fragments
+      // for comparison against recalculating in new frame.
+      double x[3] = {1., 0., 0.};
+      double y[3] = {0., 1., 0.};
+      double z[3] = {0., 0., 1.};
+      quat_rotate_vec(q_conj, x);
+      quat_rotate_vec(q_conj, y);
+      quat_rotate_vec(q_conj, z);
+
+      FragmentListIter frags = dofulator_get_semirigid_fragments(ctx);
+      const Fragment* frag;
+      while ((frag = fragmentlist_iter_next(&frags))) {
+        for (uint32_t i = 0; i < frag->n_atoms; ++i) {
+          AtomTag a = frag->atoms[i];
+          // Sum up total DoF in each direction
+          double d, rdx, rdy, rdz;
+          test->dof[a][0] = test->dof[a][1] = test->dof[a][2] = 0.;
+          for (size_t m = 0; m < frag->n_modes; ++m) {
+            rdx = frag->dof[ 3*i    * 3*frag->n_atoms + m];
+            rdy = frag->dof[(3*i+1) * 3*frag->n_atoms + m];
+            rdz = frag->dof[(3*i+2) * 3*frag->n_atoms + m];
+            d = rdx * x[0] + rdy * x[1] + rdz * x[2];
+            test->dof[a][0] += d*d;
+            d = rdx * y[0] + rdy * y[1] + rdz * y[2];
+            test->dof[a][1] += d*d;
+            d = rdx * z[0] + rdy * z[1] + rdz * z[2];
+            test->dof[a][2] += d*d;
+          }
+        }
+      }
+      // Now apply rotation to system
+      for (size_t i = 0; i < test->atoms.n; ++i) {
+        quat_rotate_vec(q, test->atoms.x[i]);
+      }
   }
 }
 
@@ -66,7 +123,8 @@ bool run_test(Test* test) {
     return false;
   }
   DofulatorResult err;
-  size_t iter = 0;
+  bool init_success = false;
+  const char* iter_msg = "";
   for (Bond* b = test->bonds.bonds; b < test->bonds.bonds + test->bonds.n; ++b) {
     switch (test->test_type) {
       case RIGID:
@@ -90,8 +148,9 @@ bool run_test(Test* test) {
     result = false;
     goto cleanup;
   }
+  init_success = true;
 
-  ++iter;
+  iter_msg = "Initial calculation";
   err = dofulator_calculate(ctx, test->atoms.mass, (const double(*)[3])test->atoms.x);
   if (err) {
     result = false;
@@ -101,47 +160,59 @@ bool run_test(Test* test) {
   if (!result) goto cleanup;
 
   // Check for rotational invariance
-  double angle = 90. * DEG;
-  Quaternion q = {.x = sin(angle/2.), .y = 0, .z = 0, .w = cos(angle/2.)};
-  rotate_system(q, test);
-  ++iter;
-  err = dofulator_calculate(ctx, test->atoms.mass, (const double(*)[3])test->atoms.x);
-  if (err) {
-    result = false;
-    goto cleanup;
-  }
-  result &= check_result(ctx, test, result);
-  if (!result) goto cleanup;
+  RotationTest rotations[] = {
+    {
+      .name = "Rotation invariance - 90 degrees around x axis",
+      .q = {.x = sin(90.*DEG/2.), .y = 0, .z = 0, .w = cos(90*DEG/2.)},
+    },
+    {
+      .name = "Rotation invariance - 2nd 90 degrees around x axis",
+      .q = {.x = sin(90.*DEG/2.), .y = 0, .z = 0, .w = cos(90*DEG/2.)},
+    },
+    {
+      .name = "Rotation invariance - 180 degrees around x axis",
+      .q = {.x = sin(180.*DEG/2.), .y = 0, .z = 0, .w = cos(180*DEG/2.)},
+    },
+    {
+      .name = "Rotation invariance - 30 degrees around z axis",
+      .q = {.x = 0, .y = 0, .z = sin(30.*DEG/2.), .w = cos(30*DEG/2.)},
+    },
+    {
+      .name = "Rotation invariance - Undo 30 degrees around z axis",
+      .q = {.x = 0, .y = 0, .z = sin(-30.*DEG/2.), .w = cos(-30*DEG/2.)},
+    },
+    {
+      .name = "Rotation invariance - 30 degrees around non-basis axis",
+      .q = {.x = 0, .y = sin(30.*DEG/2.)*cos(30*DEG), .z = sin(30.*DEG/2.)*sin(30*DEG), .w = cos(30*DEG/2.)},
+    },
+    {
+      .name = "Rotation invariance - Undo 30 degrees around non-basis axis",
+      .q = {.x = 0, .y = sin(-30.*DEG/2.)*cos(30*DEG), .z = sin(-30.*DEG/2.)*sin(30*DEG), .w = cos(-30*DEG/2.)},
+    },
+  };
 
-  // Cover 180 degree rotation
-  rotate_system(q, test);
-  ++iter;
-  err = dofulator_calculate(ctx, test->atoms.mass, (const double(*)[3])test->atoms.x);
-  if (err) {
-    result = false;
-    goto cleanup;
+  for (RotationTest* rot = rotations; rot < rotations + sizeof(rotations)/sizeof(RotationTest); ++rot) {
+    iter_msg = rot->name;
+    rotate_system(rot->q, test);
+    err = dofulator_calculate(ctx, test->atoms.mass, (const double(*)[3])test->atoms.x);
+    if (err) {
+      result = false;
+      goto cleanup;
+    }
+    result &= check_result(ctx, test, result);
+    if (!result) goto cleanup;
   }
-  result &= check_result(ctx, test, result);
-  if (!result) goto cleanup;
-
-  // Non-90 degree rotation
-  angle = 30. * DEG;
-  q = (Quaternion){.x = 0, .y = cos(30*DEG)*sin(angle/2.), .z = sin(30*DEG)*sin(angle/2.), .w = cos(angle/2.)};
-  rotate_system(q, test);
-  ++iter;
-  err = dofulator_calculate(ctx, test->atoms.mass, (const double(*)[3])test->atoms.x);
-  if (err) {
-    result = false;
-    goto cleanup;
-  }
-  result &= check_result(ctx, test, result);
 
 cleanup:
   dofulator_destroy(&ctx);
   if (err) {
     printf("\t! Failure with error code: %d\n", err);
   }
-  if (!result && iter) printf("\t! Failure occurred on iteration %ld\n", iter);
+  if (!init_success) {
+    printf("\t! Failed to initialise context\n");
+  } else if (!result) {
+    printf("\t! Failure occurred on: %s\n", iter_msg);
+  }
   return result;
 }
 

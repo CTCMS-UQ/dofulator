@@ -7,6 +7,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef NDEBUG
+#include <stdio.h>
+#endif
+
 #include "cblas_lapacke.h"
 #include "dofulator.h"
 #include "fragment.h"
@@ -800,25 +804,24 @@ static DofulatorResult fragment_solve_dof(Dofulator ctx, Fragment* frag, double*
     0.0, frag->dof, row_stride
   );
 
-  // Calculate directional DoF per atom per mode
-  for (size_t r = 0; r < 3*n_atoms; ++r) {
-    for (size_t m = 0; m < frag->n_modes; ++m) {
-      frag->dof[r*row_stride + m] *= frag->dof[r*row_stride + m];
-    }
-  }
-
   // Disregard modes with inertia less than a small fraction of the largest inertia
+  // Scale by sqrt(modal inertia) so arbitrary directional DoF can be calculated from dof matrix
   double Ithresh = Itotal[frag->n_modes-1] * DBL_EPSILON;
   for (size_t m = 0; m < frag->n_modes; ++m) {
-    const double Iinv = Itotal[m] > Ithresh ? 1. / Itotal[m] : 0.;
+    const double Iinv = Itotal[m] > Ithresh ? 1. / sqrt(Itotal[m]) : 0.;
     cblas_dscal(3*n_atoms, Iinv, &frag->dof[m], row_stride);
   }
 
-  // Sum up total DoF in each direction
+  // Sum up total DoF in each axis of current reference frame.
+  // Sum of 3 directions gives total DoF.
+  const double* row;
   for (size_t a = 0; a < frag->n_atoms; ++a) {
-    frag->dof_total[3*a]   = dsum(frag->n_modes, &frag->dof[ 3*a    * row_stride]);
-    frag->dof_total[3*a+1] = dsum(frag->n_modes, &frag->dof[(3*a+1) * row_stride]);
-    frag->dof_total[3*a+2] = dsum(frag->n_modes, &frag->dof[(3*a+2) * row_stride]);
+    row = &frag->dof[ 3*a    * row_stride];
+    frag->dof_total[3*a]   = cblas_ddot(frag->n_modes, row, 1, row, 1);
+    row += row_stride;
+    frag->dof_total[3*a+1] = cblas_ddot(frag->n_modes, row, 1, row, 1);
+    row += row_stride;
+    frag->dof_total[3*a+2] = cblas_ddot(frag->n_modes, row, 1, row, 1);
   }
   return DOF_SUCCESS;
 }
@@ -966,6 +969,15 @@ static Quaternion frame_get_rotation(const RefFrame* frame, const double x[][3],
   // Find quaternion which rotates a onto the r12 vector
   Quaternion qa = quat_from_closest_arc(a, frame->r12);
 
+#ifndef NDEBUG
+  // Check first rotation is correct
+  quat_rotate_vec(qa, a);
+  vec_normalize(a);
+  assert(fabs(a[0] - frame->r12[0]) < 5e-10);
+  assert(fabs(a[1] - frame->r12[1]) < 5e-10);
+  assert(fabs(a[2] - frame->r12[2]) < 5e-10);
+#endif
+
   // If linear fragment, qa is all that's needed
   if (frame->ref_atom3 == frame->ref_atom2) {
     return qa;
@@ -981,18 +993,24 @@ static Quaternion frame_get_rotation(const RefFrame* frame, const double x[][3],
 
   // Get rotation around r12 axis such that c aligns with r13_perp == r12 x r13.
   // frame->r12 and r13_perp are normalized.
-  Quaternion qb = quat_from_vec(frame->r12);
+  // Use c x r13_perp to get rotation axis with sin(angle) scaling.
+  // Use 1 + cos(angle) and then normalize to get rotation by angle/2.
+  double axis_b[3];
+  vec_cross(c, frame->r13_perp, axis_b);
+  Quaternion qb = quat_from_vec(axis_b);
   double cos_angle = vec_dot(c, frame->r13_perp);
-  if (fabs(1. + cos_angle) > 100.*DBL_EPSILON) {
-    // Need non-zero axis if w is zero or normalizing gives NaN
-    double sin_angle = sqrt(1 - cos_angle*cos_angle);
-    qb.x *= sin_angle;
-    qb.y *= sin_angle;
-    qb.z *= sin_angle;
-  }
   qb.w = 1. + cos_angle;
   qb = quat_normalize(qb);
 
+#ifndef NDEBUG
+  // Check second rotation is correct
+  quat_rotate_vec(qb, c);
+  assert(fabs(c[0] - frame->r13_perp[0]) < 5e-10);
+  assert(fabs(c[1] - frame->r13_perp[1]) < 5e-10);
+  assert(fabs(c[2] - frame->r13_perp[2]) < 5e-10);
+#endif
+
+  // Full rotation from applying qa and then qb.
   return quat_mul(qb, qa);
 }
 
@@ -1235,8 +1253,8 @@ double dofulator_get_dof_atom(const struct Dofulator* ctx, AtomTag atom_idx) {
  * Get the directional DoF of the atom with index `atom_idx`
 */
 void dofulator_get_dof_atom_directional(const struct Dofulator* restrict ctx, AtomTag atom_idx, double dof[restrict 3]) {
+  dof[0] = dof[1] = dof[2] = 0.;
   if (atom_idx >= ctx->n_atoms) {
-    dof[0] = dof[1] = dof[2] = 0.;
     return;
   }
   FragIndex frag_idx = ctx->frag_map[atom_idx];
@@ -1257,12 +1275,27 @@ void dofulator_get_dof_atom_directional(const struct Dofulator* restrict ctx, At
     double x[3] = {1., 0., 0.};
     double y[3] = {0., 1., 0.};
     double z[3] = {0., 0., 1.};
-    quat_rotate_vec(ctx->rigid_ref_frames[frag_idx.idx].current_rot, x);
-    quat_rotate_vec(ctx->rigid_ref_frames[frag_idx.idx].current_rot, y);
-    quat_rotate_vec(ctx->rigid_ref_frames[frag_idx.idx].current_rot, z);
-    dof[0] = frag->dof_total[3*i]*x[0]*x[0] + frag->dof_total[3*i+1]*y[0]*y[0] + frag->dof_total[3*i+2]*z[0]*z[0];
-    dof[1] = frag->dof_total[3*i]*x[1]*x[1] + frag->dof_total[3*i+1]*y[1]*y[1] + frag->dof_total[3*i+2]*z[1]*z[1];
-    dof[2] = frag->dof_total[3*i]*x[2]*x[2] + frag->dof_total[3*i+1]*y[2]*y[2] + frag->dof_total[3*i+2]*z[2]*z[2];
+    Quaternion q = ctx->rigid_ref_frames[frag_idx.idx].current_rot;
+    quat_rotate_vec(q, x);
+    quat_rotate_vec(q, y);
+    quat_rotate_vec(q, z);
+
+    // Sum up total DoF in each direction
+    // For direction e_a, DoF = sum_{m in modes} e_m (mJQ_i)^T e_a^T e_a mJQ_i e_m / lambda_m
+    // where mJQ_i = rows of sqrt(M)JQ corresponding to atom i, and lambda_m = modal inertia.
+    // frag->dof matrix stores sqrt(m)JQ/sqrt(lambda_m)
+    double d, rdx, rdy, rdz;
+    for (size_t m = 0; m < 6; ++m) {
+      rdx = frag->dof[ 3*i    * 6 + m];
+      rdy = frag->dof[(3*i+1) * 6 + m];
+      rdz = frag->dof[(3*i+2) * 6 + m];
+      d = x[0]*rdx + x[1]*rdy + x[2]*rdz;
+      dof[0] += d*d;
+      d = y[0]*rdx + y[1]*rdy + y[2]*rdz;
+      dof[1] += d*d;
+      d = z[0]*rdx + z[1]*rdy + z[2]*rdz;
+      dof[2] += d*d;
+    }
   } else {
     dof[0] = frag->dof_total[3*i];
     dof[1] = frag->dof_total[3*i+1];
