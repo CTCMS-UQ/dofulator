@@ -1,5 +1,15 @@
 # Using dofulator
 
+* [CLI](#CLI)
+* [C](#C)
+    - [Setting up the context](#Setting-up-the-context)
+    - [Calculating and querying DoF](#Calculating-and-querying-DoF)
+    - [Considerations for kinematic loops](#Considerations-for-kinematic-loops)
+    - [Querying fragments](#Querying-fragments)
+    - [Errors](#Errors)
+* [Python](#Python)
+* [MDAnalysis](#MDAnalysis)
+
 ## CLI
 
 The command-line interface (`dof`) takes an `.xyz` file (optionally with added
