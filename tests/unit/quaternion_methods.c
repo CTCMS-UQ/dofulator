@@ -46,7 +46,7 @@ int main(void) {
     return EXIT_FAILURE;
   }
 
-  printf("Checking 6x rotation \t\t\t\t... ");
+  printf("Checking 6x rotation \t\t\t... ");
   a[0] = 1.; a[1] = a[2] = 0.;
   b[0] = 1.; b[1] = b[2] = 0.;
   angle = 60*DEG;
@@ -85,7 +85,7 @@ int main(void) {
     return EXIT_FAILURE;
   }
 
-  printf("Checking quat_from_closest_arc, 180 deg\t\t... ");
+  printf("Checking quat_from_closest_arc, 180 deg\t... ");
   a[0] = -1.;
   a[1] = -1.;
   a[2] = 0.;
