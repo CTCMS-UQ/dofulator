@@ -1,7 +1,19 @@
+import os
+import sys
 import pytest
 import dofulator as dof
 import MDAnalysis as mda
 import numpy as np
+
+DATADIR = os.path.join(os.path.dirname(__file__), 'data')
+if not os.path.exists(DATADIR):
+    print(f'Cannot find data directory: {DATADIR}', file=sys.stderr)
+    exit(1)
+
+TEMPDIR = os.path.join(DATADIR, 'temperature')
+if not os.path.exists(TEMPDIR):
+    print(f'Cannot find data directory: {TEMPDIR}', file=sys.stderr)
+    exit(1)
 
 """
 Testing of MDA interface
@@ -15,10 +27,30 @@ def bicyclo_conformations():
     overconstrained sections (rigid angles or dihedrals) and becoming fully rigid (rigid dihedrals).
     """
     return mda.Universe(
-            'data/1-methoxybicyclo[2.2.1]heptane.gro',
-            'data/1-methoxybicyclo[2.2.1]heptane.trr',
+            os.path.join(DATADIR, '1-methoxybicyclo[2.2.1]heptane', 'geometry.gro'),
+            os.path.join(DATADIR, '1-methoxybicyclo[2.2.1]heptane', 'conformations.trr'),
             to_guess=('masses', 'bonds', 'angles', 'dihedrals'),
         )
+
+@pytest.fixture
+def temperature_systems():
+    """
+    Systems with velocity data for testing local temperature calculation
+    """
+    return load_temperature_systems()
+
+def load_temperature_systems():
+    """
+    Helper function to allow direct calling for data generation
+    """
+    return [
+            (name, mda.Universe(
+                os.path.join(DATADIR, name, 'topol.gro'),
+                os.path.join(DATADIR, name, 'traj.trr'),
+                to_guess=('masses', 'elements', 'bonds', 'angles', 'dihedrals'),
+            ))
+            for name in ('ethane', 'benzene')
+        ]
 
 class TestMDADofulator:
     def test_equivalent_inputs(self, bicyclo_conformations):
@@ -110,6 +142,62 @@ class TestMDADofulator:
                 )
 
 
-class TestLocalTemperature:
-    def test_trivial(self):
-        return True;
+class TestLocalTemperatureRegression:
+    def test_temperature_configs(self, temperature_systems):
+        """
+        Check that calculated local temperatures match previously generated data files.
+        """
+        for (name, u) in temperature_systems:
+            def check_results(t: dof.LocalTemperature, bonds, angles, bodies, mode):
+                fname = get_temperature_fname(name, bonds, angles, bodies, mode)
+                expected = np.fromfile(fname).reshape(t.results.shape)
+                np.testing.assert_array_equal(t.results, expected)
+            loop_temperature_constraint_combos(u, check_results)
+
+def get_temperature_fname(name: None|str, bonds: None|str, angles: None|str, bodies: None|str, mode: None|str):
+    """
+    Get file of temperature data for given configuration.
+    """
+    fname = f'{name}.{mode}'
+    if bonds is not None:
+        fname += '.rigidbonds'
+    if angles is not None:
+        fname += '.rigidangles'
+    if bodies is not None:
+        fname += '.rigidbodies'
+    fname += '.npy'
+    return os.path.join(TEMPDIR, fname)
+
+
+def loop_temperature_constraint_combos(u: mda.Universe, fn):
+    """
+    Calculate local temperatures for combinations of rigid bonds, angles and
+    bodies in atomic and directional modes, and apply `fn` to each case.
+    """
+    d = dof.MDADofulator(u.atoms)
+    selections = [u.select_atoms(f'element {e}') for e in np.unique(u.atoms.elements)]
+    selections.insert(0, u.select_atoms('all'))
+    for bonds in [None, 'all']:
+        for angles in [None, 'all']:
+            for bodies in [None, 'all']:
+                if bodies is not None and (bonds is not None or angles is not None):
+                    continue
+                for mode in ['atomic', 'directional']:
+                    d.set_rigid_bonds(bonds)
+                    d.set_rigid_angles(angles)
+                    d.set_rigid_bodies(bodies)
+                    t = dof.LocalTemperature(selections, d, mode=mode)
+                    t.boltz *= 100 # Account for incorrect velocity units from .trr
+                    t.run()
+                    fn(t, bonds, angles, bodies, mode)
+
+
+if __name__ == '__main__':
+    # Generate temperature data files for regression testing
+    systems = load_temperature_systems()
+    for (name, u) in systems:
+        def write_results(t: dof.LocalTemperature, bonds, angles, bodies, mode):
+            fname = get_temperature_fname(name, bonds, angles, bodies, mode)
+            t.results.tofile(fname)
+        loop_temperature_constraint_combos(u, write_results)
+
