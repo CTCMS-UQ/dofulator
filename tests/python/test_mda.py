@@ -28,18 +28,18 @@ class TestMDADofulator:
         in the dihedrals.
         """
         bonds = [b for b in bicyclo_conformations.bonds if np.any([(b[0] in a and b[1] in a) for a in bicyclo_conformations.angles])]
-        d_a = dof.MDADofulator(bicyclo_conformations.atoms, rigid_angles='all')
-        d_ba = dof.MDADofulator(bicyclo_conformations.atoms, rigid_bonds=bonds, rigid_angles='all')
+        d_a = dof.MDADofulator(bicyclo_conformations.atoms, rigid_angles='all', use_pbc=False)
+        d_ba = dof.MDADofulator(bicyclo_conformations.atoms, rigid_bonds=bonds, rigid_angles='all', use_pbc=False)
         d_ba.run()
         d_a.run()
         np.testing.assert_array_almost_equal(d_a.results, d_ba.results, err_msg='Setting rigid_angles not equivalent to setting rigid_bonds + rigid_angles')
 
         bonds = [b for b in bicyclo_conformations.bonds if np.any([(b[0] in d and b[1] in d) for d in bicyclo_conformations.dihedrals])]
         angles = [a for a in bicyclo_conformations.angles if np.any([(a[0] in d and a[1] in d and a[2] in d) for d in bicyclo_conformations.dihedrals])]
-        d_d = dof.MDADofulator(bicyclo_conformations.atoms, rigid_dihedrals='all')
-        d_ad = dof.MDADofulator(bicyclo_conformations.atoms, rigid_angles=angles, rigid_dihedrals='all')
-        d_bd = dof.MDADofulator(bicyclo_conformations.atoms, rigid_bonds=bonds, rigid_dihedrals='all')
-        d_bad = dof.MDADofulator(bicyclo_conformations.atoms, rigid_bonds=bonds, rigid_angles=angles, rigid_dihedrals='all')
+        d_d = dof.MDADofulator(bicyclo_conformations.atoms, rigid_dihedrals='all', use_pbc=False)
+        d_ad = dof.MDADofulator(bicyclo_conformations.atoms, rigid_angles=angles, rigid_dihedrals='all', use_pbc=False)
+        d_bd = dof.MDADofulator(bicyclo_conformations.atoms, rigid_bonds=bonds, rigid_dihedrals='all', use_pbc=False)
+        d_bad = dof.MDADofulator(bicyclo_conformations.atoms, rigid_bonds=bonds, rigid_angles=angles, rigid_dihedrals='all', use_pbc=False)
 
         d_d.run()
         d_ad.run()
@@ -53,7 +53,7 @@ class TestMDADofulator:
         """
         1-methoxybicyclo[2.2.1]heptane with rigid bonds. Check total DoF is correct in all conformations.
         """
-        d = dof.MDADofulator(bicyclo_conformations.atoms, rigid_bonds='all')
+        d = dof.MDADofulator(bicyclo_conformations.atoms, rigid_bonds='all', use_pbc=False)
         d.run()
         np.testing.assert_array_almost_equal(
                 np.sum(d.results, axis=1),
@@ -71,7 +71,7 @@ class TestMDADofulator:
          * methoxy rotation around C--O (C in loop structure)
          * methyl rotation around O--C (C in methyl)
         """
-        d = dof.MDADofulator(bicyclo_conformations.atoms, rigid_angles='all')
+        d = dof.MDADofulator(bicyclo_conformations.atoms, rigid_angles='all', use_pbc=False)
         d.run()
         np.testing.assert_array_almost_equal(
                 np.sum(d.results, axis=1),
@@ -85,8 +85,8 @@ class TestMDADofulator:
         (many kinematic loops, overconstrained, equivalent to rigid body).
         """
         bicyclo_conformations.trajectory[1]
-        d_semirigid = dof.MDADofulator(bicyclo_conformations.atoms, rigid_angles='all', rigid_dihedrals='all')
-        d_rigid = dof.MDADofulator(bicyclo_conformations.atoms, rigid_bodies='all')
+        d_semirigid = dof.MDADofulator(bicyclo_conformations.atoms, rigid_angles='all', rigid_dihedrals='all', use_pbc=False)
+        d_rigid = dof.MDADofulator(bicyclo_conformations.atoms, rigid_bodies='all', use_pbc=False)
 
         # Bond lengths/angles/dihedrals change each conformation, so check each frame individually.
         # Otherwise rigid case assumption of fixed geometry is incorrect.
