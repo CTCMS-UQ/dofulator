@@ -159,11 +159,11 @@ returned if the allocation fails.
 ### Considerations for kinematic loops
 
 For topologies with closed kinematic loops, loop closing constraints are handled
-by finding the null space of the matrix $K$ which describes motion along those constraints.
+by finding the null space of the matrix $`\mathbf{K}`$ which describes motion along those constraints.
 This is achieved with singular value decomposition by finding the singular values below
 a small fraction of the largest singular value.
 With the default null space threshold value of 0.0, the threshold fraction is
-determined as `DBL_EPSILON` multiplied by the largest dimension of the $K$
+determined as `DBL_EPSILON` multiplied by the largest dimension of the $`\mathbf{K}`$
 matrix.
 This should be accurate for standard cases, but can be changed if needed using
 `dofulator_set_null_space_thresh(ctx, thresh)`.
@@ -171,7 +171,7 @@ Internally, the absolute value of `thresh` is taken, and is then clamped to a
 maximum of 1, so higher values will be interpreted as 1, and negative values
 will be interpreted as positive.
 The current value can be queried with `thresh = dofulator_get_null_space_thresh(ctx)`.
-For some topologies that result in a $K$ matrix where numerical precision
+For some topologies that result in a $`\mathbf{K}`$ matrix where numerical precision
 becomes a problem, it may be necessary to raise the cut-off in order to get the
 correct total number of DoF, although such cases are very unlikely in
 practice.
@@ -215,7 +215,7 @@ should be checked. The same is true of `dofulator_finalise_fragments`,
 Possible values are:
 
 | Value                       | Description |
-|-----------------------------+-------------+
+|-----------------------------|-------------|
 | `DOF_SUCCESS`               | No error.   |
 | `DOF_UNINITIALISED`         | Received an uninitialised context. |
 | `DOF_ALLOC_FAILURE`         | Failed to allocate memory. |
@@ -242,18 +242,18 @@ ctx = Dofulator(num_atoms)
 ```
 
 Rigid bonds which form semi-rigid fragments can be added with
-```
+```python
 ctx.add_rigid_bond(atom_index_i, atom_index_j)
 ```
 
 Similarly, atoms can be joined into a rigid body with
-```
+```python
 ctx.build_rigid_fragment(atom_index_i, atom_index_j)
 ```
 
 As for the C interface, once all rigid constraints have been added to the context, fragments are finalised
 with
-```
+```python
 ctx.finalise_fragments()
 ```
 
@@ -264,7 +264,7 @@ box matrix from vectors `a`, `b` and `c` using
 
 With periodicity set, if any rigid fragments are present (i.e. `ctx.build_rigid_fragment(...)` was called),
 then a call must be made to
-```
+```python
 ctx.precalculate_rigid(masses, positions)
 ```
 where `masses` is a 1D Numpy array of 64 bit floats with length >= the number of atoms (`ctx.n_atoms`),
@@ -279,7 +279,7 @@ The latter two functions can optionally take a parameter for a list of particula
 
 Iterators over rigid and semi-rigid fragments can be obtained with `ctx.get_rigid_fragments()` and
 `ctx.get_semirigid_fragments()`. For example:
-```
+```python
 for rigid_body in ctx.get_rigid_fragments():
     for atom_index in rigid_body.atoms():
         do_something()
@@ -387,6 +387,10 @@ t.run()
 ```
 Note, the atom list passed in to the `MDADofulator` class when it was constructed *MUST*
 contain all atoms which may possibly be selected by any of the selections.
+
+Care should be taken when using selections which may sometimes be empty (e.g. very small spatial bins).
+Division by the zero DoF in those selections will result in `nan` or `inf` temperatures,
+the handling of which should be carefully considered.
 
 For some constraint topologies, the total DoF of a given atom does not vary greatly
 as the molecule moves, and hence it can be useful for performance reasons to pre-calculate

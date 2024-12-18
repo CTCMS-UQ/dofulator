@@ -22,12 +22,12 @@ and compile with `-ldofulator`.
 ### CMake Configuration
 
 | Flag                    | Default   | Description                                           |
-+-------------------------+-----------+-------------------------------------------------------+
+|-------------------------|-----------|-------------------------------------------------------|
 | `DOF_LIBRARY_ONLY`      | `OFF`     | Build only the library (and not the CLI)      |
 | `DOF_SHARED_LIB`        | `OFF`     | Build as a shared library (default is to build a static library) |
 | `DOF_ATOM_TAG_TYPE`     | `int64_t` | Data type to store atom identifiers. Must be an integer type. |
 | `DOF_ENABLE_PYTHON`     | `ON`      | Include Python targets and tests. |
-| `BLA_VENDOR`            |           | Override the default BLAS vendor. |
+| `BLA_VENDOR`            |           | Override the default BLAS vendor (see [FindBLAS](https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors)). |
 | `FORCE_CBLAS_INCLUDE`   |           | Header file to include for CBLAS. The build script tries to auto-detect this, but if it fails for an obscure BLAS vendor it can be set manually here.|
 | `FORCE_LAPACKE_INCLUDE` |           | Header file to include for LAPACKE. The build script tries to auto-detect this, but if it fails for an obscure BLAS vendor it can be set manually here.|
 | `ENABLE_LTO`            | `ON`      | Use link-time optimisations if supported |

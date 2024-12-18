@@ -6,12 +6,11 @@ Per-atom and per-direction DoF are calculated using the methods described
 in [J. Chem. Theory Comput. 2024, 20, 23, 10615–10624](https://doi.org/10.1021/acs.jctc.4c00957),
 which are applicable to both rigid bodies and semi-rigid fragments.
 
-The core library is provided as a C API (see [the docs](doc/usage.md#C) or [dofulator.h](src/dofulator.h)).
-For further details, see [the documentation](doc/README.md).
-
+The core library is provided as a C API (see [the usage docs](doc/usage.md#C) or [dofulator.h](src/dofulator.h)).
 A Python wrapper is also provided, and includes some plugins compatible with
-[MDAnalysis](https://github.com/MDAnalysis/mdanalysis).
-Some example usage is shown [below](#Examples).
+[MDAnalysis](https://github.com/MDAnalysis/mdanalysis) (some example usage is shown [below](#MDAnalysis-examples)).
+
+For further details, see [the documentation](doc/README.md).
 
 
 ## Installation
@@ -24,14 +23,14 @@ pip install git+https://github.com/CTCMS-UQ/dofulator[mdanalysis]
 ```
 
 
-## Examples
+## MDAnalysis examples
 
 ### Directional DoF of all atoms
 
 ```python
 import MDAnalysis as mda
 from dofulator import MDADofulator
-u = mda.Universe('trajectory.traj')
+u = mda.Universe('topology.tpr', 'trajectory.trr')
 d = MDADofulator(
     u.atoms,            # Include all relevant atoms in the dofulator context
     rigid_bonds=[b for b in u.bonds if b.type == '3'],          # Set bond type 3 as rigid
@@ -50,7 +49,7 @@ use of MDAnalysis' `AtomGroup`s, which can dynamically update as the trajectory 
 import MDAnalysis as mda
 import numpy as np
 from dofulator import MDADofulator, LocalTemperature
-u = mda.Universe('trajectory.traj')
+u = mda.Universe('topology.tpr', 'trajectory.trr')
 zrange = np.linspace(0, u.dimensions[2], 11) # 10 bins in the z direction
 t = LocalTemperature(
     # List of atom selections, each of which will get temperature calculated on each frame
