@@ -2,3 +2,5 @@ build/
 .cache/
 __pycache__/
 python/dofulator/c_dofulator.cpython*
+tests/python/data/.*.npz
+tests/python/data/.*.lock
