@@ -3,45 +3,30 @@
 This library provides a degrees of freedom (DoF) calculator for molecular dynamics
 simulations which use rigid geometry constraints.
 Per-atom and per-direction DoF are calculated using the methods described
-[here](https://arxiv.org/abs/2402.11171), which are applicable to both rigid bodies
-and semi-rigid fragments.
+in [J. Chem. Theory Comput. 2024, 20, 23, 10615–10624](https://doi.org/10.1021/acs.jctc.4c00957),
+which are applicable to both rigid bodies and semi-rigid fragments.
 
-The core library is provided as a C API (documentation coming soon, or see [dofulator.h](src/dofulator.h)).
+The core library is provided as a C API (see [the docs](doc/usage.md#C) or [dofulator.h](src/dofulator.h)).
+For further details, see [the documentation](doc/README.md).
 
-A Python wrapper is also provided, and can be installed from the root of this
-repository with:
-```bash
-$ python -m pip install .
-```
-or to include optional dependencies for MDAnalysis compatibility:
-```bash
-$ python -m pip install .[mdanalysis]
-```
-As the C library requires BLAS and LAPACK, these must be present on your system.
-You can install them with your system package manager, or via other package
-managers like conda.
-MKL and OpenBLAS have both been tested to work. Other implementations should
-also work, but may require some additional configuration.
-A particular blas implementation can be chosen on installation, for example to choose OpenBLAS:
-```bash
-$ python -m pip install . --config-settings=cmake.define.BLA_VENDOR=OpenBLAS
-```
-See the [FindBLAS](https://cmake.org/cmake/help/latest/module/FindBLAS.html#blas-lapack-vendors)
-documentation for details of other vendor options.
-
-If your BLAS implementation uses odd names for the `cblas.h` or `lapacke.h` headers, you
-can set these directly with the flags `--config-settings=cmake.define.FORCE_CBLAS_INCLUDE=my_cblas.h`
-and `--config-settings=cmake.define.FORCE_LAPECKE_INCLUDE=my_lapacke.h`.
-
-## MDAnalysis
-
-Along with the python wrapper are some plugins compatible with
+A Python wrapper is also provided, and includes some plugins compatible with
 [MDAnalysis](https://github.com/MDAnalysis/mdanalysis).
-Some example usage is shown below:
+Some example usage is shown [below](#Examples).
 
-### Examples
 
-#### Directional DoF of all atoms
+## Installation
+
+See [here](doc/installation.md) for full installation details.
+
+To quickly set up for usage with MDAnalysis:
+```
+pip install git+https://github.com/CTCMS-UQ/dofulator[mdanalysis]
+```
+
+
+## Examples
+
+### Directional DoF of all atoms
 
 ```python
 import MDAnalysis as mda
@@ -57,7 +42,7 @@ d.run()
 # Access results via d.results
 ```
 
-#### Local temperature
+### Temperature profile across system
 
 For local temperature calculation, the `LocalTemperature` class makes
 use of MDAnalysis' `AtomGroup`s, which can dynamically update as the trajectory plays.

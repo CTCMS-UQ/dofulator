@@ -55,7 +55,6 @@ class MDADofulator(AnalysisBase):
         self.mode = mode
         self.null_space_thresh = null_space_thresh
         self.use_pbc = use_pbc
-        self.pbc: bool = use_pbc and (atomgroup.universe.dimensions is not None)
         self.set_rigid_bodies(rigid_bodies)
         self.set_rigid_bonds(rigid_bonds)
         self.set_rigid_angles(rigid_angles)
