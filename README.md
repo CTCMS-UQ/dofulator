@@ -8,7 +8,7 @@ which are applicable to both rigid bodies and semi-rigid fragments.
 
 The core library is provided as a C API (see [the usage docs](doc/usage.md#C) or [dofulator.h](src/dofulator.h)).
 A Python wrapper is also provided, and includes some plugins compatible with
-[MDAnalysis](https://github.com/MDAnalysis/mdanalysis) (some example usage is shown [below](#MDAnalysis-examples)).
+[MDAnalysis](https://github.com/MDAnalysis/mdanalysis) (some example usage is shown [below](#mdanalysis-examples)).
 
 For further details, see [the documentation](doc/README.md).
 
@@ -65,3 +65,8 @@ t = LocalTemperature(
 t.run()
 # t.results contains an n_frames x 10 array with temperature of each bin on each frame
 ```
+
+## Citation
+
+When using dofulator in published work, please cite the following paper:
+1. S. Sanderson, S. R. Tee, and D. J. Searles; Local Temperature Measurement in Molecular Dynamics Simulations with Rigid Constraints *Journal of Chemical Theory and Computation* **2024** *20* (23), 10615–10624. DOI: [10.1021/acs.jctc.4c00957](https://doi.org/10.1021/acs.jctc.4c00957)
