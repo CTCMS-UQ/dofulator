@@ -19,7 +19,7 @@ See [here](doc/installation.md) for full installation details.
 
 To quickly set up for usage with MDAnalysis:
 ```
-pip install git+https://github.com/CTCMS-UQ/dofulator[mdanalysis]
+pip install dofulator[mdanalysis]@git+https://github.com/CTCMS-UQ/dofulator.git
 ```
 
 
