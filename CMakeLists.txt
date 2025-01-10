@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.13)
+cmake_minimum_required(VERSION 3.15)
 project(dofulator C)
 
 if (NOT CMAKE_C_STANDARD)
@@ -42,6 +42,7 @@ endif()
 target_include_directories(dofulator BEFORE PRIVATE ${INCLUDE_DIRS})
 
 # Warnings
+set(CMAKE_REQUIRED_QUIET TRUE)  # Suppress status messages from flag check
 include(CheckCCompilerFlag)
 foreach(FLAG IN ITEMS -Wall -Wextra -Wpedantic -fPIC)
   check_c_compiler_flag(${FLAG} HAVE_FLAG)

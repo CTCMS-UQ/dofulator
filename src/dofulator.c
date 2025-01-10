@@ -1252,7 +1252,7 @@ double dofulator_get_dof_atom(const struct Dofulator* ctx, AtomTag atom_idx) {
 /*******************************************************************************
  * Get the directional DoF of the atom with index `atom_idx`
 */
-void dofulator_get_dof_atom_directional(const struct Dofulator* restrict ctx, AtomTag atom_idx, double dof[restrict 3]) {
+void dofulator_get_dof_atom_directional(const struct Dofulator* restrict ctx, AtomTag atom_idx, double NOALIAS_ARR(dof, 3)) {
   dof[0] = dof[1] = dof[2] = 0.;
   if (atom_idx >= ctx->n_atoms) {
     return;
@@ -1342,7 +1342,7 @@ double* dofulator_get_dof_atoms_directional(
   const struct Dofulator* restrict ctx,
   const size_t n_atoms,
   const AtomTag* restrict atoms,
-  double dof[restrict][3]
+  double (*restrict dof)[3]
 ) {
   if (dof == NULL) {
     dof = (double(*)[3])malloc(sizeof(double) * n_atoms * 3);

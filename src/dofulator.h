@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <stdint.h>
 
+#include "compat.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -178,7 +180,7 @@ double dofulator_get_dof_atom(const struct Dofulator* ctx, AtomTag atom_idx);
 void dofulator_get_dof_atom_directional(
   const struct Dofulator* restrict ctx,
   AtomTag atom_idx,
-  double dof[restrict 3]
+  double NOALIAS_ARR(dof, 3)
 );
 
 // Get the total DoF of the `n_atoms` atoms with indices in `atoms`. Returned in `dof` and as return value.
@@ -201,7 +203,7 @@ double* dofulator_get_dof_atoms_directional(
   const struct Dofulator* restrict ctx,
   const size_t n_atoms,
   const AtomTag* restrict atoms,
-  double dof[restrict][3]
+  double (*restrict dof)[3]
 );
 
 

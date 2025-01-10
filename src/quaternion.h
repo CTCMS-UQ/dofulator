@@ -5,6 +5,7 @@
 #include <float.h>
 #include <math.h>
 
+#include "compat.h"
 #include "vec3.h"
 
 typedef struct Quaternion {
@@ -56,7 +57,7 @@ static inline Quaternion quat_identity(void) {
 }
 
 // Find quaternion which rotates v1 onto v2, assuming v2 is normalized
-static inline Quaternion quat_from_closest_arc(const double v1[restrict 3], const double v2[restrict 3]) {
+static inline Quaternion quat_from_closest_arc(const double NOALIAS_ARR(v1, 3), const double NOALIAS_ARR(v2, 3)) {
   assert(vec_dot(v2, v2) - 1. < 100. * DBL_EPSILON);
 
   // For non-normalised vectors, general formula is:
