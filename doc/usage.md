@@ -20,6 +20,9 @@ form a single rigid body.
 See the [tests](tests/frontend) directory for example input (`.xyz`) and output
 (`.dof`) files, or run `dof --help` for more information.
 
+Note, the `dof` program was designed mainly for testing purposes.
+It's likely that the MDAnalysis plugins are more useful, since they enable much broader filetype compatibility.
+
 
 ## C
 
@@ -28,6 +31,12 @@ Rigid and semi-rigid fragments are defined by adding connections to the context.
 Fragments are then finalised, and rigid fragment DoF is pre-calculated from reference geometry.
 From this point, repeated calculations can be made with different configurations of the fragments,
 and the results queried to get the DoF of atoms of interest.
+
+Once [installed](installation.md), the library can be included in your project with
+```C
+#include <dofulator.h>
+```
+and linked with `-ldofulator`.
 
 ### Setting up the context
 The context is created by calling `dofulator_create(N)`, where `N` is

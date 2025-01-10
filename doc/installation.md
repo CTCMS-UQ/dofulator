@@ -10,14 +10,11 @@ $ cmake --build .
 $ cmake --install . --component dofulator   # optional - install the library
 $ cmake --install . --component dof         # optional - install the CLI
 ```
-This will require CMake to be able to find a BLAS and LAPACK installation.
-
-In your own project, just
-```C
-#include <dofulator.h>
-```
-and compile with `-ldofulator`.
-
+This will require CMake to be able to find a BLAS and LAPACK installation
+(the MKL and OpenBLAS implementations have both been confirmed to work).
+BLAS and LAPACK should be found automatically if they are installed,
+but some environments may require additional configuration or specific flags to be set.
+If you encounter errors with `FindBLAS`, this is likely the reason.
 
 ### CMake Configuration
 
@@ -36,6 +33,14 @@ and compile with `-ldofulator`.
 | `ENABLE_ASAN`           | `OFF`     | Build with address sanitization (for debugging purposes) |
 | `ENABLE_UBSAN`          | `OFF`     | Build with undefined behaviour sanitization (for debugging purposes) |
 
+### Testing
+
+To run automated tests, from the `build` directory:
+```bash
+$ cmake . -DENABLE_TESTING=ON
+$ cmake --build . --target tests
+$ ctest
+```
 
 ## For Python projects
 
@@ -64,4 +69,5 @@ documentation for details of other vendor options.
 
 If your BLAS implementation uses odd names for the `cblas.h` or `lapacke.h` headers, you
 can set these directly with the flags `--config-settings=cmake.define.FORCE_CBLAS_INCLUDE=my_cblas.h`
-and `--config-settings=cmake.define.FORCE_LAPECKE_INCLUDE=my_lapacke.h`.
+and `--config-settings=cmake.define.FORCE_LAPECKE_INCLUDE=my_lapacke.h`
+(replacing `my_cblas.h` and `my_lapacke.h` with the appropriate header names).
