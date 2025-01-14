@@ -3,6 +3,7 @@ requires = [
   "cython >= 0.28",
   # Builds against numpy 2.x are runtime-compatible with numpy 1.x
   "numpy>=2.0",
+  'scipy-openblas32', # TODO: make this optional for using system BLAS
   "scikit-build-core",
 ]
 build-backend = "scikit_build_core.build"
@@ -12,7 +13,8 @@ name = "dofulator"
 version = "0.0.1"
 description = "Python interface to Dofulator for DoF calculation of atoms with rigid constraints"
 dependencies = [
-  'numpy>=1.23.2'
+  'numpy>=1.23.2',
+  'scipy-openblas32',
 ]
 
 [project.optional-dependencies]
@@ -33,6 +35,8 @@ DOF_LIBRARY_ONLY = "ON"
 DOF_SHARED_LIB = "OFF"
 # Python components must be enabled
 DOF_ENABLE_PYTHON = "ON"
+# Build against scipy-openblas32 for simpler portability
+DOF_USE_SCIPY_OPENBLAS32 = "ON"
 
 [tool.pytest.ini_options]
 minversion = '6.0'

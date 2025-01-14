@@ -761,7 +761,7 @@ static DofulatorResult fragment_solve_dof(Dofulator ctx, Fragment* frag, double*
   const size_t n_atoms = frag->n_atoms;
   const size_t row_stride = frag->rigid ? 6 : 3*n_atoms;
   // Store J^T M J in Q ready for eigensolve
-  cblas_dgemm(
+  cblas(dgemm)(
     CblasRowMajor, CblasTrans, CblasNoTrans,
     frag->n_modes, frag->n_modes, 3*n_atoms,
     1.0, mJ, row_stride, mJ, row_stride,
@@ -797,7 +797,7 @@ static DofulatorResult fragment_solve_dof(Dofulator ctx, Fragment* frag, double*
   //               = lambda_m (= eigenvalue m)
 
   // Store the full transform M^1/2 J Q for later to get per-atom modal inertia
-  cblas_dgemm(
+  cblas(dgemm)(
     CblasRowMajor, CblasNoTrans, CblasNoTrans,
     3*n_atoms, frag->n_modes, frag->n_modes,
     1.0, mJ, row_stride, Q, row_stride,
@@ -809,7 +809,7 @@ static DofulatorResult fragment_solve_dof(Dofulator ctx, Fragment* frag, double*
   double Ithresh = Itotal[frag->n_modes-1] * DBL_EPSILON;
   for (size_t m = 0; m < frag->n_modes; ++m) {
     const double Iinv = Itotal[m] > Ithresh ? 1. / sqrt(Itotal[m]) : 0.;
-    cblas_dscal(3*n_atoms, Iinv, &frag->dof[m], row_stride);
+    cblas(dscal)(3*n_atoms, Iinv, &frag->dof[m], row_stride);
   }
 
   // Sum up total DoF in each axis of current reference frame.
@@ -817,11 +817,11 @@ static DofulatorResult fragment_solve_dof(Dofulator ctx, Fragment* frag, double*
   const double* row;
   for (size_t a = 0; a < frag->n_atoms; ++a) {
     row = &frag->dof[ 3*a    * row_stride];
-    frag->dof_total[3*a]   = cblas_ddot(frag->n_modes, row, 1, row, 1);
+    frag->dof_total[3*a]   = cblas(ddot)(frag->n_modes, row, 1, row, 1);
     row += row_stride;
-    frag->dof_total[3*a+1] = cblas_ddot(frag->n_modes, row, 1, row, 1);
+    frag->dof_total[3*a+1] = cblas(ddot)(frag->n_modes, row, 1, row, 1);
     row += row_stride;
-    frag->dof_total[3*a+2] = cblas_ddot(frag->n_modes, row, 1, row, 1);
+    frag->dof_total[3*a+2] = cblas(ddot)(frag->n_modes, row, 1, row, 1);
   }
   return DOF_SUCCESS;
 }
@@ -1098,11 +1098,11 @@ static inline DofulatorResult dofulator_calculate_semirigid(Dofulator ctx, const
 
           // Calculate J_j - J_i, store 3 x 3*n_atoms result in Q
           memcpy(Q, &((*J)[3*j][0]), sizeof(double) * n_modes*3);
-          cblas_daxpy(3*n_modes, -1.0, &((*J)[3*i][0]), 1, Q, 1);
+          cblas(daxpy)(3*n_modes, -1.0, &((*J)[3*i][0]), 1, Q, 1);
 
           // Calculate row k of K = T^T (J_j - J_i)
           // Use (J_j - J_i)^T x T and store result in K[k][:]
-          cblas_dgemv(CblasRowMajor, CblasTrans, 3, n_modes, 1.0, Q, n_modes, rij, 1, 0., &((*K)[k][0]), 1);
+          cblas(dgemv)(CblasRowMajor, CblasTrans, 3, n_modes, 1.0, Q, n_modes, rij, 1, 0., &((*K)[k][0]), 1);
         }
 
         // Find null(K) from low singular values of K
@@ -1163,7 +1163,7 @@ static inline DofulatorResult dofulator_calculate_semirigid(Dofulator ctx, const
 
         // Project Jacobian onto null(K).
         // null(K) = ( VT[rank_K:3*n_atoms][..] )^T
-        cblas_dgemm(
+        cblas(dgemm)(
           CblasRowMajor, CblasNoTrans, CblasTrans,
           n_modes, n_modes - rank_K, n_modes,
           1.0, &((*J)[0][0]), n_modes,
@@ -1178,9 +1178,9 @@ static inline DofulatorResult dofulator_calculate_semirigid(Dofulator ctx, const
       for (AtomTag a = 0; a < n_atoms; ++a) {
         // TODO: pre-calculate sqrt(mass) and store on fragment?
         double root_mass = sqrt(mass[frag->atoms[a]]);
-        cblas_dscal(frag->n_modes, root_mass, &mJ[3*a*3*n_atoms], 1);
-        cblas_dscal(frag->n_modes, root_mass, &mJ[(3*a+1)*3*n_atoms], 1);
-        cblas_dscal(frag->n_modes, root_mass, &mJ[(3*a+2)*3*n_atoms], 1);
+        cblas(dscal)(frag->n_modes, root_mass, &mJ[3*a*3*n_atoms], 1);
+        cblas(dscal)(frag->n_modes, root_mass, &mJ[(3*a+1)*3*n_atoms], 1);
+        cblas(dscal)(frag->n_modes, root_mass, &mJ[(3*a+2)*3*n_atoms], 1);
       }
 
       DofulatorResult e = fragment_solve_dof(ctx, frag, mJ, Q);

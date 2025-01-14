@@ -22,6 +22,7 @@ set(DOF_SHARED_LIB OFF CACHE BOOL "Build library as shared. Default is static.")
 set(DOF_ATOM_TAG_TYPE "int64_t" CACHE STRING "Integer data type for atom identifiers. Default int64_t required for compatibility with python wrapper.")
 set(DOF_ENABLE_PYTHON ON CACHE BOOL "Enable building/testing of the python interface")
 
+set(DOF_USE_SCIPY_OPENBLAS32 OFF CACHE BOOL "Build against scipy-openblas32 BLAS/LAPACK library")
 set(FORCE_CBLAS_INCLUDE "" CACHE STRING "Override name of cblas header to include")
 set(FORCE_LAPACKE_INCLUDE "" CACHE STRING "Override name of lapacke header to include")
 
@@ -64,65 +65,82 @@ install(FILES ${SRC_DIR}/dofulator.h DESTINATION include)
 # Set up cblas and lapacke includes/linkage
 # Default vendor can be overridden by setting BLA_VENDOR
 # OpenBLAS seems to marginally beat MKL in speed for all test cases
-find_package(LAPACK REQUIRED)
-find_package(BLAS REQUIRED)
+
+# Force use of scipy-openblas if specified
+if (${DOF_USE_SCIPY_OPENBLAS32})
+  find_package(Python COMPONENTS Interpreter Development.Module NumPy REQUIRED)
+  set(SCIPY_OPENBLAS_DIR ${Python_SITELIB}/scipy_openblas32)
+  list(PREPEND CMAKE_PREFIX_PATH ${SCIPY_OPENBLAS_DIR})
+  set(INCLUDE_CBLAS "cblas.h")
+  set(INCLUDE_LAPACKE "lapacke.h")
+  set(BLAS_LIBRARIES scipy_openblas)
+  target_include_directories(dofulator PRIVATE ${SCIPY_OPENBLAS_DIR}/include)
+  target_link_directories(dofulator PRIVATE ${SCIPY_OPENBLAS_DIR}/lib)
+  target_compile_definitions(dofulator PRIVATE SCIPY_OPENBLAS)
+  message(STATUS "Using scipy-openblas32: ${SCIPY_OPENBLAS_DIR}")
+else()
+
+  find_package(LAPACK REQUIRED)
+  find_package(BLAS REQUIRED)
 
 # Detect found vendor
-set(DETECTED_VENDOR "Unknown")
-foreach (BLIB ${BLAS_LIBRARIES})
-  if (${BLIB} MATCHES openblas)
-    set(DETECTED_VENDOR "OpenBLAS")
-    break()
-  elseif (${BLIB} MATCHES mkl)
-    set(DETECTED_VENDOR "MKL")
-    break()
-  endif()
-endforeach()
-message(STATUS "Detected BLAS vendor: ${DETECTED_VENDOR}")
+  set(DETECTED_VENDOR "Unknown")
+  foreach (BLIB ${BLAS_LIBRARIES})
+    if (${BLIB} MATCHES openblas)
+      set(DETECTED_VENDOR "OpenBLAS")
+      break()
+    elseif (${BLIB} MATCHES mkl)
+      set(DETECTED_VENDOR "MKL")
+      break()
+    endif()
+  endforeach()
+  message(STATUS "Detected BLAS vendor: ${DETECTED_VENDOR}")
 
-macro(set_cblas_lapacke_headers CBLAS LAPACKE)
-  if (FORCE_CBLAS_INCLUDE STREQUAL "")
-    set(INCLUDE_CBLAS ${CBLAS})
-  else()
-    set(INCLUDE_CBLAS ${FORCE_CBLAS_INCLUDE})
-  endif()
-  if (FORCE_LAPACKE_INCLUDE STREQUAL "")
-    set(INCLUDE_LAPACKE ${LAPACKE})
-  else()
-    set(INCLUDE_LAPACKE ${FORCE_LAPACKE_INCLUDE})
-  endif()
-endmacro()
+  macro(set_cblas_lapacke_headers CBLAS LAPACKE)
+    if (FORCE_CBLAS_INCLUDE STREQUAL "")
+      set(INCLUDE_CBLAS ${CBLAS})
+    else()
+      set(INCLUDE_CBLAS ${FORCE_CBLAS_INCLUDE})
+    endif()
+    if (FORCE_LAPACKE_INCLUDE STREQUAL "")
+      set(INCLUDE_LAPACKE ${LAPACKE})
+    else()
+      set(INCLUDE_LAPACKE ${FORCE_LAPACKE_INCLUDE})
+    endif()
+  endmacro()
 
-if (DETECTED_VENDOR STREQUAL OpenBLAS)
-  # Some package managers put openblas headers under a prefix, so detect that
-  set_cblas_lapacke_headers("openblas/cblas.h" "openblas/lapacke.h")
-  try_compile(OPENBLAS_PREFIX_INCLUDE
-    SOURCE_FROM_CONTENT
-      openblas_test.c
-      "#include <${INCLUDE_CBLAS}>\n#include <${INCLUDE_LAPACKE}>\nint main(void) {}"
-    NO_CACHE
-    LINK_LIBRARIES ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES}
-    LINK_OPTIONS ${BLAS_LINKER_FLAGS} ${LAPACK_LINKER_FLAGS}
-  )
-  if (NOT OPENBLAS_PREFIX_INCLUDE)
+  if (DETECTED_VENDOR STREQUAL OpenBLAS)
+    # Some package managers put openblas headers under a prefix, so detect that
+    set_cblas_lapacke_headers("openblas/cblas.h" "openblas/lapacke.h")
+    try_compile(OPENBLAS_PREFIX_INCLUDE
+      SOURCE_FROM_CONTENT
+        openblas_test.c
+        "#include <${INCLUDE_CBLAS}>\n#include <${INCLUDE_LAPACKE}>\nint main(void) {}"
+      NO_CACHE
+      LINK_LIBRARIES ${BLAS_LIBRARIES} ${LAPACK_LIBRARIES}
+      LINK_OPTIONS ${BLAS_LINKER_FLAGS} ${LAPACK_LINKER_FLAGS}
+    )
+    if (NOT OPENBLAS_PREFIX_INCLUDE)
+      set_cblas_lapacke_headers("cblas.h" "lapacke.h")
+    endif()
+    target_compile_definitions(dofulator PRIVATE BLA_VENDOR_OPENBLAS)
+  elseif (DETECTED_VENDOR STREQUAL MKL)
+    find_package(MKL CONFIG REQUIRED PATHS $ENV{MKLROOT})
+    set_cblas_lapacke_headers("mkl_cblas.h" "mkl_lapacke.h")
+    target_compile_options(dofulator PUBLIC $<TARGET_PROPERTY:MKL::MKL,INTERFACE_COMPILE_OPTIONS>)
+    target_compile_definitions(dofulator PRIVATE MKL_EXTENSIONS)
+    target_include_directories(dofulator PUBLIC $<TARGET_PROPERTY:MKL::MKL,INTERFACE_INCLUDE_DIRECTORIES>)
+    target_link_libraries(dofulator PUBLIC $<LINK_ONLY:MKL::MKL>)
+  else()
+    message(WARNING
+      "Unsupported BLAS/LAPACK vendor - may not be able to find headers."
+      "If compilation fails, try pointing INCLUDE_DIRECTORIES to the include directory of the BLAS/LAPACK implementations"
+      "and/or setting FORCE_CBLAS_INCLUDE and FORCE_LAPACKE_INCLUDE to the correct header file names for the implementation."
+      "Alternatively, you can set BLA_VENDOR to use a different BLAS/LAPACK implementation."
+    )
     set_cblas_lapacke_headers("cblas.h" "lapacke.h")
   endif()
-  target_compile_definitions(dofulator PRIVATE BLA_VENDOR_OPENBLAS)
-elseif (DETECTED_VENDOR STREQUAL MKL)
-  find_package(MKL CONFIG REQUIRED PATHS $ENV{MKLROOT})
-  set_cblas_lapacke_headers("mkl_cblas.h" "mkl_lapacke.h")
-  target_compile_options(dofulator PUBLIC $<TARGET_PROPERTY:MKL::MKL,INTERFACE_COMPILE_OPTIONS>)
-  target_compile_definitions(dofulator PRIVATE MKL_EXTENSIONS)
-  target_include_directories(dofulator PUBLIC $<TARGET_PROPERTY:MKL::MKL,INTERFACE_INCLUDE_DIRECTORIES>)
-  target_link_libraries(dofulator PUBLIC $<LINK_ONLY:MKL::MKL>)
-else()
-  message(WARNING
-    "Unsupported BLAS/LAPACK vendor - may not be able to find headers."
-    "If compilation fails, try pointing INCLUDE_DIRECTORIES to the include directory of the BLAS/LAPACK implementations"
-    "and/or setting FORCE_CBLAS_INCLUDE and FORCE_LAPACKE_INCLUDE to the correct header file names for the implementation."
-    "Alternatively, you can set BLA_VENDOR to use a different BLAS/LAPACK implementation."
-  )
-  set_cblas_lapacke_headers("cblas.h" "lapacke.h")
+
 endif()
 
 configure_file(${SRC_DIR}/cblas_lapacke.in.h ${CMAKE_BINARY_DIR}/cblas_lapacke.h @ONLY USE_SOURCE_PERMISSIONS)
