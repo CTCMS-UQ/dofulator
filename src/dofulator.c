@@ -633,14 +633,18 @@ DofulatorResult dofulator_finalise_fragments(Dofulator ctx) {
 
   // Partition fragments by Jacobian size (number of atoms) for batched linalg.
   // Left-over empty fragments are placed at the end to be truncated.
-  qsort(
-    ctx->semirigid_frags.fragments,
-    ctx->semirigid_frags.n_fragments,
-    sizeof(*ctx->semirigid_frags.fragments), fragment_sort_cmp);
-  qsort(
-    ctx->rigid_frags.fragments,
-    ctx->rigid_frags.n_fragments,
-    sizeof(*ctx->rigid_frags.fragments), fragment_sort_cmp);
+  if (ctx->semirigid_frags.n_fragments > 0) {
+    qsort(
+      ctx->semirigid_frags.fragments,
+      ctx->semirigid_frags.n_fragments,
+      sizeof(*ctx->semirigid_frags.fragments), fragment_sort_cmp);
+  }
+  if (ctx->rigid_frags.n_fragments > 0) {
+    qsort(
+      ctx->rigid_frags.fragments,
+      ctx->rigid_frags.n_fragments,
+      sizeof(*ctx->rigid_frags.fragments), fragment_sort_cmp);
+  }
 
   // Allocate space for Jacobians
 
