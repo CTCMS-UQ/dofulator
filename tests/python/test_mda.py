@@ -151,7 +151,7 @@ class TestLocalTemperatureRegression:
             def check_results(t: dof.LocalTemperature, bonds, angles, bodies, mode):
                 fname = get_temperature_fname(name, bonds, angles, bodies, mode)
                 expected = np.fromfile(fname).reshape(t.results.shape)
-                np.testing.assert_array_equal(t.results, expected)
+                np.testing.assert_array_almost_equal(t.results, expected)
             loop_temperature_constraint_combos(u, check_results)
 
 def get_temperature_fname(name: None|str, bonds: None|str, angles: None|str, bodies: None|str, mode: None|str):

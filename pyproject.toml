@@ -4,7 +4,9 @@ requires = [
   # Builds against numpy 2.x are runtime-compatible with numpy 1.x
   "numpy>=2.0",
   'scipy-openblas32', # TODO: make this optional for using system BLAS
-  "scikit-build-core",
+  "scikit-build-core >= 0.10",
+  # Avoid msvc incompatibility by compiling with zig cc
+  "ziglang==0.13.0.post1 ; platform_system == 'Windows'",
 ]
 build-backend = "scikit_build_core.build"
 
@@ -23,7 +25,8 @@ mdanalysis = [
 ]
 
 [tool.scikit-build]
-cmake.targets = ["c_dofulator"]
+minimum-version = "build-system.requires"
+build.targets = ["c_dofulator"]
 ninja.make-fallback = false
 
 [tool.scikit-build.cmake.define]
@@ -37,6 +40,18 @@ DOF_SHARED_LIB = "OFF"
 DOF_ENABLE_PYTHON = "ON"
 # Build against scipy-openblas32 for simpler portability
 DOF_USE_SCIPY_OPENBLAS32 = "ON"
+
+# Enable zig cc in ziglang package of isolated build environment
+[[tool.scikit-build.overrides]]
+if.platform-system = "Windows"
+inherit.cmake.define = "append"
+cmake.define.DOF_USE_PY_ZIGLANG = "ON"
+
+# Use zig cc from pre-installed ziglang package
+[[tool.scikit-build.overrides]]
+if.env.ZIGLANG_PATH = true
+inherit.cmake.define = "append"
+cmake.define.CMAKE_C_COMPILER = "zig;cc"
 
 [tool.pytest.ini_options]
 minversion = '6.0'

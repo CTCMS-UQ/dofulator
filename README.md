@@ -19,9 +19,36 @@ See [here](doc/installation.md) for full installation details.
 
 To quickly set up for usage with MDAnalysis:
 ```
-pip install dofulator[mdanalysis]@git+https://github.com/CTCMS-UQ/dofulator.git
+pip install "dofulator[mdanalysis]@git+https://github.com/CTCMS-UQ/dofulator.git"
 ```
 
+NOTE: This will require a compatible BLAS and LAPACK implementation to be installed.
+MKL and OpenBLAS have both been confirmed to work.
+
+### Linux
+
+Linux users can install BLAS and LAPACK via their package manager, or load the relevant module
+if using an HPC environment.
+Note, depending on your Linux distribution you may need to install the cblas and lapacke versions, possibly with a -dev or -devel suffix.
+
+### Mac
+
+Mac users can install OpenBLAS via homebrew.
+The following flags (or similar) will likely be needed with the above command to properly locate the installation:
+```
+--config-settings=cmake.define.BLA_VENDOR=OpenBLAS --config-settings=cmake.define.CMAKE_PREFIX_PATH=/opt/homebrew/Cellar/openblas/<VERSION_NUMBER>/ --config-settings=cmake.define.CMAKE_C_FLAGS='-I/opt/homebrew/Cellar/openblas/<VERSION_NUMBER/include'
+```
+Make sure to set the correct version number for the version you have installed.
+
+### Windows
+
+For Windows users, BLAS and LAPACK can be installed via Conda with:
+```
+TODO
+```
+Additionally, note that the MSVC compiler is *NOT* currently supported, since it does not
+fully comply with modern C standards.
+Instead, the build defaults to the Zig C compiler bundled in the `ziglang` python package.
 
 ## MDAnalysis examples
 

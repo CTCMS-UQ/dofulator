@@ -21,6 +21,23 @@ target_include_directories(c_dofulator PRIVATE ${Python_NumPy_INCLUDE_DIRS} ${SR
 target_compile_definitions(c_dofulator PRIVATE NPY_NO_DEPRECATED_API=NPY_1_7_API_VERSION)
 target_link_libraries(c_dofulator PRIVATE dofulator)
 
+# FindPython sometimes gives incorrect SOABI suffix. Use SKBUILD to correct it if available.
+if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    set_property (TARGET ${name} PROPERTY SUFFIX ".${SKBUILD_SOABI}.pyd")
+else()
+    set_property (TARGET ${name} PROPERTY SUFFIX ".${SKBUILD_SOABI}${CMAKE_SHARED_MODULE_SUFFIX}")
+endif()
+
+# Avoid double extension bug
+get_target_property(SOABI_SUFFIX c_dofulator SUFFIX)
+get_filename_component(CDOF_EXT1 ${SOABI_SUFFIX} LAST_EXT)
+get_filename_component(CDOF_NOEXT1 ${SOABI_SUFFIX} NAME_WLE)
+get_filename_component(CDOF_EXT2 ${CDOF_NOEXT1} LAST_EXT)
+if (CDOF_EXT1 STREQUAL CDOF_EXT2)
+  set_target_properties(c_dofulator PROPERTIES SUFFIX ${CDOF_NOEXT1})
+endif()
+
+# Install details
 file(GLOB PY_SRCS ${CMAKE_CURRENT_SOURCE_DIR}/dofulator/*.*)
 install(TARGETS c_dofulator DESTINATION dofulator/)
 install(FILES ${PY_SRCS} DESTINATION dofulator/)

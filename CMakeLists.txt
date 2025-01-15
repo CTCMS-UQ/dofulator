@@ -1,15 +1,6 @@
-cmake_minimum_required(VERSION 3.13)
-project(dofulator C)
+cmake_minimum_required(VERSION 3.15)
 
-if (NOT CMAKE_C_STANDARD)
-  set(CMAKE_C_STANDARD 11)
-endif()
-if (CMAKE_C_STANDARD LESS 11)
-  message(FATAL_ERROR "C standard must be set to at least 11")
-endif()
-
-set(CMAKE_C_STANDARD_REQUIRED ON)
-set(CMAKE_C_EXTENSIONS OFF CACHE BOOL "Use compiler extensions")
+################################################################################
 
 set(ENABLE_LTO ON CACHE BOOL "Enable link-time optimisation if supported")
 
@@ -26,9 +17,62 @@ set(DOF_USE_SCIPY_OPENBLAS32 OFF CACHE BOOL "Build against scipy-openblas32 BLAS
 set(FORCE_CBLAS_INCLUDE "" CACHE STRING "Override name of cblas header to include")
 set(FORCE_LAPACKE_INCLUDE "" CACHE STRING "Override name of lapacke header to include")
 
+################################################################################
+
+# The msvc C compiler does not support foo[restrict N] syntax or pointer to VLA types.
+# For portability, the zig cc compiler can be used either from wherever it's installed
+# in the system or from the ziglang python package.
+# Setting the ZIGLANG_PATH environment variable achieves the former, or
+# DOF_USE_PY_ZIGLANG=ON achieves the latter.
+#
+# Need to do this before calling project()
+
+set(DOF_USE_PY_ZIGLANG OFF CACHE BOOL "Build with the zig C compiler bundled with the ziglang Python package")
+
+# Look for zig in ZIGLANG_PATH if defined
+if (NOT $ENV{ZIGLANG_PATH} STREQUAL "")
+  list(PREPEND CMAKE_PREFIX_PATH $ENV{ZIGLANG_PATH})
+  set(TRY_USING_ZIG ON)
+endif()
+
+# Look for ziglang python package
+if (${DOF_USE_PY_ZIGLANG})
+  set(TRY_USING_ZIG ON)
+  find_package(Python COMPONENTS Interpreter)
+  execute_process(COMMAND ${Python_EXECUTABLE} -c "import ziglang" RESULT_VARIABLE CHECK_ZIGLANG OUTPUT_QUIET ERROR_QUIET)
+  if (CHECK_ZIGLANG EQUAL 0)
+    message(STATUS "Found ziglang python package. Compiling with zig cc")
+    list(PREPEND CMAKE_PREFIX_PATH ${Python_SITELIB}/ziglang)
+  else()
+    message(WARNING "Could not find ziglang python package! Falling back to default compiler.")
+  endif()
+endif()
+
+if (TRY_USING_ZIG)
+  find_program(ZIG_FOUND zig)
+  if (ZIG_FOUND)
+    set(CMAKE_C_COMPILER "zig;cc")
+  else()
+    message(WARNING "Could not find the zig compiler! Falling back to default.")
+  endif()
+endif()
+
+################################################################################
+
+project(dofulator C)
+
+if (NOT CMAKE_C_STANDARD)
+  set(CMAKE_C_STANDARD 11)
+endif()
+if (CMAKE_C_STANDARD LESS 11)
+  message(FATAL_ERROR "C standard must be set to at least 11")
+endif()
+
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS OFF CACHE BOOL "Use compiler extensions")
+
 set(SRC_DIR ${PROJECT_SOURCE_DIR}/src)
 set(INCLUDE_DIRS ${INCLUDE_DIRECTORIES} ${SRC_DIR})
-
 
 ################################################################################
 # dofulator core library
@@ -173,6 +217,21 @@ if (ENABLE_UBSAN)
   target_link_libraries(dofulator PUBLIC -fsanitize=undefined)
 endif()
 
+# zig cc enables asan/ubsan by default, so turn off if disabled
+get_filename_component(COMPILER_BASENAME ${CMAKE_C_COMPILER} NAME)
+if (${COMPILER_BASENAME} STREQUAL "zig")
+  set(NO_SANITIZE "")
+  if (NOT ENABLE_UBSAN)
+    list(APPEND NO_SANITIZE "undefined")
+  endif()
+  if (NOT ENABLE_ASAN)
+    list(APPEND NO_SANITIZE "address")
+  endif()
+  list(JOIN NO_SANITIZE "," NOSAN)
+  if (NOT ${NOSAN} STREQUAL "")
+    list(APPEND CMAKE_C_FLAGS "-fno-sanitize=${NOSAN}")
+  endif()
+endif()
 
 ################################################################################
 # dof binary
