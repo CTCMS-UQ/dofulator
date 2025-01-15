@@ -22,16 +22,17 @@ set(FORCE_LAPACKE_INCLUDE "" CACHE STRING "Override name of lapacke header to in
 # The msvc C compiler does not support foo[restrict N] syntax or pointer to VLA types.
 # For portability, the zig cc compiler can be used either from wherever it's installed
 # in the system or from the ziglang python package.
-# Setting the ZIGLANG_PATH environment variable achieves the former, or
+# Setting the ZIGLANG_PATH variable achieves the former, or
 # DOF_USE_PY_ZIGLANG=ON achieves the latter.
 #
 # Need to do this before calling project()
 
+set(ZIGLANG_PATH "" CACHE STRING "Path to the Zig directory. Setting this will make CMake prioritise using the zig cc compiler.")
 set(DOF_USE_PY_ZIGLANG OFF CACHE BOOL "Build with the zig C compiler bundled with the ziglang Python package")
 
 # Look for zig in ZIGLANG_PATH if defined
-if (NOT $ENV{ZIGLANG_PATH} STREQUAL "")
-  list(PREPEND CMAKE_PREFIX_PATH $ENV{ZIGLANG_PATH})
+if (NOT ${ZIGLANG_PATH} STREQUAL "")
+  list(PREPEND CMAKE_PREFIX_PATH ${ZIGLANG_PATH})
   set(TRY_USING_ZIG ON)
 endif()
 

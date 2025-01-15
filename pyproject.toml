@@ -25,6 +25,12 @@ mdanalysis = [
   'MDAnalysis',
 ]
 
+[external]
+optional-host-requires = [
+  'virtual:interface/blas',
+  'virtual:interface/lapack',
+]
+
 [tool.scikit-build]
 minimum-version = "build-system.requires"
 build.targets = ["c_dofulator"]
@@ -47,12 +53,6 @@ DOF_USE_SCIPY_OPENBLAS32 = "ON"
 if.platform-system = "Windows"
 inherit.cmake.define = "append"
 cmake.define.DOF_USE_PY_ZIGLANG = "ON"
-
-# Use zig cc from pre-installed ziglang package
-[[tool.scikit-build.overrides]]
-if.env.ZIGLANG_PATH = true
-inherit.cmake.define = "append"
-cmake.define.CMAKE_C_COMPILER = "zig;cc"
 
 [tool.pytest.ini_options]
 minversion = '6.0'
