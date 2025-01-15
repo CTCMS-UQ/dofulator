@@ -277,8 +277,8 @@ static inline void pbc_wrap_shortest(const PBC* pbc, double r[3]) {
  * Solve process:
  * Build J (in mJQ for loops, or in mJ for trees/rigid)
  * (loops only)
- *    build K from J (can use mJ scratch space for result, VT scratch for J_j - J_i, Q scratch for T^T) -> batched dgemm for each T^T (J_j - J_i)
- *    find null(K) (store in VT scratch space, singular values in dof_total)
+ *    build K from J (can use mJ scratch space for result, Z scratch for J_j - J_i, Q scratch for T^T) -> batched dgemm for each T^T (J_j - J_i)
+ *    find null(K) (store in Z scratch space, singular values in dof_total)
  *      -> dgesvd in loop over batch. Pass NULL for U.
  *      -> Also needs WORK storage (get size from dgesvd call, can allocate for single fragment and re-use)
  *    project J onto null(K) (store in mJ scratch space) -> batched dgemm
@@ -291,7 +291,7 @@ static inline void pbc_wrap_shortest(const PBC* pbc, double r[3]) {
  * Storage requirements per batch:
  * - mJ space (Jacobian size, or [n_loops * 3*n_atoms] for loop closures)
  * - Q  space (Eigenvector size)
- * - VT space (Jacobian size - semi-rigid only)
+ * - Z  space (Jacobian size - semi-rigid only)
  * - WORK space for SVD (pick largest required by any loop-closing fragments)
 */
 static inline DofulatorResult dofulator_update_batch_size(Dofulator ctx, size_t batch_size) {
@@ -775,8 +775,8 @@ static DofulatorResult fragment_solve_dof(Dofulator ctx, Fragment* frag, double*
   // Find eigenvalues/eigenvectors of inertia tensor
   double work_query;
   double* Itotal = frag->dof_total; // Temporarily use dof_total for total inertia per mode
-  lapack_int info = LAPACKE_dsyev_work(
-    LAPACK_ROW_MAJOR, 'V', 'L',
+  lapack_int info = fLAPACK_dsyev(
+    'V', 'L',
     frag->n_modes, Q, row_stride, Itotal,
     &work_query, -1
   );
@@ -788,8 +788,8 @@ static DofulatorResult fragment_solve_dof(Dofulator ctx, Fragment* frag, double*
     if (unlikely(!new_ptr)) { return DOF_ALLOC_FAILURE; }
     ctx->svd_working = new_ptr;
   }
-  info = LAPACKE_dsyev_work(
-    LAPACK_ROW_MAJOR, 'V', 'L',
+  info = fLAPACK_dsyev(
+    'V', 'L',
     frag->n_modes, Q, row_stride, Itotal,
     ctx->svd_working, ctx->svd_working_size
   );
@@ -801,8 +801,9 @@ static DofulatorResult fragment_solve_dof(Dofulator ctx, Fragment* frag, double*
   //               = lambda_m (= eigenvalue m)
 
   // Store the full transform M^1/2 J Q for later to get per-atom modal inertia
+  // Need to transpose Q since eigenvectors in column major order after dsyev
   cblas(dgemm)(
-    CblasRowMajor, CblasNoTrans, CblasNoTrans,
+    CblasRowMajor, CblasNoTrans, CblasTrans,
     3*n_atoms, frag->n_modes, frag->n_modes,
     1.0, mJ, row_stride, Q, row_stride,
     0.0, frag->dof, row_stride
@@ -1044,7 +1045,7 @@ static inline DofulatorResult dofulator_calculate_semirigid(Dofulator ctx, const
     const size_t mat_size = 3*n_atoms * 3*n_atoms;
     double* mJ = ctx->working_buf;
     double* Q = mJ + MAX(mat_size, ctx->max_K_size);
-    double* VT = Q + mat_size;
+    double* Z = Q + mat_size;
     double rij[3];
     for (size_t f = 0; f < *n_frags; ++f, ++ifrag) {
       Fragment* frag = &ctx->semirigid_frags.fragments[ifrag];
@@ -1086,17 +1087,18 @@ static inline DofulatorResult dofulator_calculate_semirigid(Dofulator ctx, const
       }
 
       // Handle loop closures.
-      // Use mJ space for K matrix, final result for null(K) stored in VT
+      // Use mJ space for K matrix, final result for null(K) stored in Z
       if (frag->n_loops > 0) {
         const lapack_int n_loops = frag->n_loops;
         const lapack_int n_modes = 3*n_atoms;
-        double (*K)[frag->n_loops][n_modes] = (double(*)[frag->n_loops][n_modes])mJ;
-        for (size_t k = 0; k < frag->n_loops; ++k) {
+        double (*K)[n_modes][n_loops] = (double(*)[n_modes][n_loops])mJ;
+        for (lapack_int k = 0; k < n_loops; ++k) {
           const Bond b = frag->loop_closures[k];
           const size_t i = ctx->atom_frag_idx[b.ai];
           const size_t j = ctx->atom_frag_idx[b.aj];
 
-          // T^T is a row vector for bonds
+          // Get bond direction.
+          // No need to normalize since null space will be the same either way.
           vec_sub(x[b.aj], x[b.ai], rij);
           pbc_wrap_shortest(&ctx->pbc, rij);
 
@@ -1104,9 +1106,10 @@ static inline DofulatorResult dofulator_calculate_semirigid(Dofulator ctx, const
           memcpy(Q, &((*J)[3*j][0]), sizeof(double) * n_modes*3);
           cblas(daxpy)(3*n_modes, -1.0, &((*J)[3*i][0]), 1, Q, 1);
 
-          // Calculate row k of K = T^T (J_j - J_i)
-          // Use (J_j - J_i)^T x T and store result in K[k][:]
-          cblas(dgemv)(CblasRowMajor, CblasTrans, 3, n_modes, 1.0, Q, n_modes, rij, 1, 0., &((*K)[k][0]), 1);
+          // Calculate row k of K = rij^T (J_j - J_i)
+          // Use (J_j - J_i)^T x rij and store result in K[k][:]
+          // Want K as column major for dgesvd, so increment = n_loops
+          cblas(dgemv)(CblasRowMajor, CblasTrans, 3, n_modes, 1.0, Q, n_modes, rij, 1, 0., &((*K)[0][k]), n_loops);
         }
 
         // Find null(K) from low singular values of K
@@ -1116,15 +1119,14 @@ static inline DofulatorResult dofulator_calculate_semirigid(Dofulator ctx, const
         // results for low singular values
         memset(S, 0, sizeof(double) * n_modes);
         double work_query;
-        lapack_int info = LAPACKE_dgesvd_work(
-          LAPACK_ROW_MAJOR,
+        lapack_int info = fLAPACK_dgesvd(
           'N', // Don't calculate any of U
           'A', // Calculate all of V^T
           n_loops, n_modes,
-          &((*K)[0][0]), n_modes,
+          &((*K)[0][0]), n_loops,
           S,
-          NULL, frag->n_loops,
-          VT, n_modes,
+          NULL, n_loops,
+          Z, n_modes,
           &work_query,
           -1
         );
@@ -1137,15 +1139,14 @@ static inline DofulatorResult dofulator_calculate_semirigid(Dofulator ctx, const
           if (unlikely(!new_ptr)) { return DOF_ALLOC_FAILURE; }
           ctx->svd_working = new_ptr;
         }
-        info = LAPACKE_dgesvd_work(
-          LAPACK_ROW_MAJOR,
+        info = fLAPACK_dgesvd(
           'N', // Don't calculate any of U
           'A', // Calculate all of V^T
           n_loops, n_modes,
-          &((*K)[0][0]), n_modes,
+          &((*K)[0][0]), n_loops,
           S,
-          NULL, frag->n_loops,
-          VT, n_modes,
+          NULL, n_loops,
+          Z, n_modes,
           ctx->svd_working,
           ctx->svd_working_size
         );
@@ -1166,12 +1167,13 @@ static inline DofulatorResult dofulator_calculate_semirigid(Dofulator ctx, const
         while (rank_K < (size_t)n_modes && S[rank_K] > thresh) { ++rank_K; }
 
         // Project Jacobian onto null(K).
-        // null(K) = ( VT[rank_K:3*n_atoms][..] )^T
+        // null(K) = Z[:][rank_K : 3*n_atoms]
+        // Z is calculated as Z^T by dgesvd, but stored column major, so use NoTrans
         cblas(dgemm)(
-          CblasRowMajor, CblasNoTrans, CblasTrans,
+          CblasRowMajor, CblasNoTrans, CblasNoTrans,
           n_modes, n_modes - rank_K, n_modes,
           1.0, &((*J)[0][0]), n_modes,
-          &VT[rank_K * n_modes], n_modes,
+          &Z[rank_K], n_modes,
           0.0, mJ, n_modes
         );
 
@@ -1202,17 +1204,17 @@ static inline DofulatorResult dofulator_calculate_semirigid(Dofulator ctx, const
   //    + dof_total: 3*max_semirigid_atoms
   //  - Auxilliary space for n_closures loop closures:
   //    + space for K matrix construction:
-  //      = T: 3 <- Use same space as VT since can be overwritten
+  //      = T: 3 <- Use same space as Z since can be overwritten
   //      = (J_j - J_i): 3*(3*max_semirigid_atoms)
-  //        * Use same space as VT since can be overwritten
+  //        * Use same space as Z since can be overwritten
   //        * Probably fastest to use daxpy on full batch to do subtraction
-  //          and store in VT memory, then dgemv to fill K?
+  //          and store in Z memory, then dgemv to fill K?
   //      = K: n_closures * 3*max_semirigid_atoms
   //        * Fill by re-using T, (J_j - Ji) memory space for each closure
   //    + space for SVD of K:
   //      = U: none - pass NULL for U arg
   //      = S: n_closures
-  //      = VT: (3*max_semirigid_atoms)^2
+  //      = Z: (3*max_semirigid_atoms)^2
   //      = WORK: get from dgesvd call
   //    + space for J * V[:, rank(S):]
   //      = Can store in eigenvector space and pointer swap back into J

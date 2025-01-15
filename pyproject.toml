@@ -3,10 +3,11 @@ requires = [
   "cython >= 0.28",
   # Builds against numpy 2.x are runtime-compatible with numpy 1.x
   "numpy>=2.0",
-  'scipy-openblas32', # TODO: make this optional for using system BLAS
   "scikit-build-core >= 0.10",
   # Avoid msvc incompatibility by compiling with zig cc
   "ziglang==0.13.0.post1 ; platform_system == 'Windows'",
+  # Build against scipy-openblas32 by default for easier installation
+  'scipy-openblas32 == 0.3.28.0.2',
 ]
 build-backend = "scikit_build_core.build"
 
