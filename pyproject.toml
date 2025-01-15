@@ -22,7 +22,7 @@ dependencies = [
 
 [project.optional-dependencies]
 mdanalysis = [
-  'MDAnalysis',
+  'MDAnalysis>=2.8.0',
 ]
 
 [external]
