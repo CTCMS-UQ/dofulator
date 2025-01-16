@@ -59,6 +59,8 @@ if (TRY_USING_ZIG)
     write_file(ar "${ZIG_PATH} ar \"$@\"")
     write_file(ranlib.cmd "${ZIG_PATH} ranlib %*")
     write_file(ranlib "${ZIG_PATH} ranlib \"$@\"")
+    set(CMAKE_C_COMPILER_AR ${CMAKE_BINARY_DIR}/ar)
+    set(CMAKE_C_COMPILER_RANLIB ${CMAKE_BINARY_DIR}/ranlib)
   endif()
 endif()
 
