@@ -4,7 +4,11 @@ add_custom_command(
   OUTPUT venv
   COMMAND Python::Interpreter -m venv venv
 )
-set(VENV_Python ${CMAKE_CURRENT_BINARY_DIR}/venv/bin/python)
+if (WIN32)
+  set(VENV_Python ${CMAKE_CURRENT_BINARY_DIR}/venv/Scripts/python)
+else()
+  set(VENV_Python ${CMAKE_CURRENT_BINARY_DIR}/venv/bin/python)
+endif()
 add_custom_command(
   OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/venv.stamp
   DEPENDS venv ${CMAKE_CURRENT_SOURCE_DIR}/requirements.txt
