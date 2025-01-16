@@ -53,6 +53,7 @@ DOF_USE_SCIPY_OPENBLAS32 = "ON"
 if.platform-system = "Windows"
 inherit.cmake.define = "append"
 cmake.define.DOF_USE_PY_ZIGLANG = "ON"
+cmake.args = ["-GNinja"]
 
 [tool.pytest.ini_options]
 minversion = '6.0'
