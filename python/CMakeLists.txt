@@ -22,10 +22,12 @@ target_compile_definitions(c_dofulator PRIVATE NPY_NO_DEPRECATED_API=NPY_1_7_API
 target_link_libraries(c_dofulator PRIVATE dofulator)
 
 # FindPython sometimes gives incorrect SOABI suffix. Use SKBUILD to correct it if available.
-if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+if (SKBUILD)
+  if (CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set_property (TARGET ${name} PROPERTY SUFFIX ".${SKBUILD_SOABI}.pyd")
-else()
+  else()
     set_property (TARGET ${name} PROPERTY SUFFIX ".${SKBUILD_SOABI}${CMAKE_SHARED_MODULE_SUFFIX}")
+  endif()
 endif()
 
 # Avoid double extension bug
@@ -35,6 +37,16 @@ get_filename_component(CDOF_NOEXT1 ${SOABI_SUFFIX} NAME_WLE)
 get_filename_component(CDOF_EXT2 ${CDOF_NOEXT1} LAST_EXT)
 if (CDOF_EXT1 STREQUAL CDOF_EXT2)
   set_target_properties(c_dofulator PROPERTIES SUFFIX ${CDOF_NOEXT1})
+endif()
+
+# Mark as windows build if needed
+if (WIN32)
+  target_compile_definitions(c_dofulator PRIVATE MS_WIN32 MS_WINDOWS)
+  if (CMAKE_SIZEOF_VOID_P EQUAL 8)
+    target_compile_definitions(c_dofulator PRIVATE MS_WIN64)
+  elseif(NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
+    message(FATAL_ERROR "Unknown architecture.")
+  endif()
 endif()
 
 # Install details
