@@ -12,11 +12,15 @@ foreach(XYZ IN ITEMS ${FRONTEND_TEST_INPUT})
     COMMAND $<TARGET_FILE:dof> ${XYZ} -o ${FRONTEND_TEST_OUTPUT}
   )
   add_test(
-    NAME frontend::${FRONTEND_TEST}
+    NAME frontend::check_${FRONTEND_TEST}
     COMMAND ${CMAKE_COMMAND} -E compare_files ${FRONTEND_TEST_REF} ${FRONTEND_TEST_OUTPUT}
   )
-  set_tests_properties(frontend::run_${FRONTEND_TEST} PROPERTIES FIXTURES_SETUP    f_${FRONTEND_TEST})
-  set_tests_properties(frontend::${FRONTEND_TEST}     PROPERTIES FIXTURES_REQUIRED f_${FRONTEND_TEST})
+  set_tests_properties(frontend::run_${FRONTEND_TEST}   PROPERTIES FIXTURES_SETUP    f_${FRONTEND_TEST})
+  set_tests_properties(frontend::check_${FRONTEND_TEST} PROPERTIES FIXTURES_REQUIRED f_${FRONTEND_TEST})
+  # Need to include scipy-openblas32 lib directory in PATH for tests to find the shared object
+  if (DOF_USE_SCIPY_OPENBLAS32)
+    set_tests_properties(frontend::run_${FRONTEND_TEST} PROPERTIES ENVIRONMENT_MODIFICATION PATH=path_list_prepend:${SCIPY_OPENBLAS_LIB})
+  endif()
   add_dependencies(tests dof)
 
   # Target to write .dof file using current output
