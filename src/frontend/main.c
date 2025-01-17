@@ -72,7 +72,7 @@ int main(int argc, char* argv[]) {
         double dof_dir[3];
         dofulator_get_dof_atom_directional(ctx, i, dof_dir);
 
-        fprintf(io.out, "%ld\t%-7s\t%.6f\t%.6f\t%.6f\t%.6f\n", i+1, mol.atom_labels[i], dof, dof_dir[0], dof_dir[1], dof_dir[2]);
+        fprintf(io.out, "%zu\t%-7s\t%.6f\t%.6f\t%.6f\t%.6f\n", i+1, mol.atom_labels[i], dof, dof_dir[0], dof_dir[1], dof_dir[2]);
       }
     } else {
       fprintf(stderr, "Error building dofulator context\n");

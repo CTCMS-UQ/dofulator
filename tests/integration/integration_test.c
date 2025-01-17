@@ -28,7 +28,7 @@ bool check_result(Dofulator ctx, Test* test, bool current_result) {
     for (unsigned d = 0; d < 3; ++d) {
       if (!feql(dof[d], test->dof[i][d])) {
         if (result) printf("FAILED\n");
-        printf("\t! Atom %ld expected %.16g DoF in %c, got %.16g\n",
+        printf("\t! Atom %zu expected %.16g DoF in %c, got %.16g\n",
                i, test->dof[i][d], (char[]){'x', 'y', 'z'}[d], dof[d]);
         result = false;
       }
@@ -37,7 +37,7 @@ bool check_result(Dofulator ctx, Test* test, bool current_result) {
     double dof_atom_actual = dofulator_get_dof_atom(ctx, i);
     if (!feql(dof_atom, dof_atom_actual)) {
       if (result) printf("FAILED\n");
-      printf("\t! Atom %ld expected %.16g DoF total, got %.16g\n",
+      printf("\t! Atom %zu expected %.16g DoF total, got %.16g\n",
              i, dof_atom, dof_atom_actual);
       result = false;
     }
