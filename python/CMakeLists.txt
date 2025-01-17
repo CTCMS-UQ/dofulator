@@ -42,10 +42,9 @@ endif()
 # Mark as windows build if needed
 if (WIN32)
   target_compile_definitions(c_dofulator PRIVATE MS_WIN32 MS_WINDOWS)
-  if (CMAKE_SIZEOF_VOID_P EQUAL 8)
+cmake_host_system_information(RESULT IS_64BIT QUERY IS_64BIT)
+  if (IS_64BIT)
     target_compile_definitions(c_dofulator PRIVATE MS_WIN64)
-  elseif(NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
-    message(FATAL_ERROR "Unknown architecture.")
   endif()
 endif()
 
