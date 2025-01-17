@@ -15,6 +15,7 @@ build-backend = "scikit_build_core.build"
 name = "dofulator"
 version = "0.0.1"
 description = "Python interface to Dofulator for DoF calculation of atoms with rigid constraints"
+requires-python = ">= 3.10"
 dependencies = [
   'numpy>=1.23.2',
   'scipy-openblas32',
@@ -48,12 +49,18 @@ DOF_ENABLE_PYTHON = "ON"
 # Build against scipy-openblas32 for simpler portability
 DOF_USE_SCIPY_OPENBLAS32 = "ON"
 
-# Enable zig cc in ziglang package of isolated build environment
 [[tool.scikit-build.overrides]]
-if.platform-system = "Windows"
+if.any.platform-system = "[(win32)(cygwin)(msys)]"
+# Enable zig cc in ziglang package of isolated build environment
+# as C compiler to avoid incompatibilities in msvc
 inherit.cmake.define = "append"
 cmake.define.DOF_USE_PY_ZIGLANG = "ON"
+# Patch stack_probe.zig to avoid a windows bug.
+# This can be removed in future when the next zig version is released.
 cmake.define.PATCH_ZIGLANG_0_13_0_STACK_PROBE = "ON"
+# Force Ninja build system on windows
+inherit.cmake.args = "prepend"
+cmake.args = ["-GNinja"]
 
 [tool.pytest.ini_options]
 minversion = '6.0'

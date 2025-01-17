@@ -51,11 +51,17 @@ if (${DOF_USE_PY_ZIGLANG})
 endif()
 
 if (TRY_USING_ZIG)
-  find_program(ZIG_PATH zig)
+  # Under scikit-build, site-packages lib for the isolated build environment should
+  # be in the cmake path, so ziglang/zig should match.
+  # Fallback to searching for zig in case not being run via scikit-build
+  find_program(ZIG_PATH ziglang/zig)
+  if (ZIG_PATH STREQUAL "ZIG_PATH-NOTFOUND")
+    find_program(ZIG_PATH zig)
+  endif()
   if (ZIG_PATH STREQUAL "ZIG_PATH-NOTFOUND")
     message(WARNING "Could not find the zig compiler! Falling back to default.")
   else()
-    set(CMAKE_C_COMPILER "zig;cc")
+    set(CMAKE_C_COMPILER "${ZIG_PATH};cc")
     # Wrappers for ar and ranlib since cmake doesn't support definition of extra arguments
     write_file(ar.cmd "${ZIG_PATH} ar %*")
     write_file(ar "${ZIG_PATH} ar \"$@\"")
@@ -70,9 +76,11 @@ if (TRY_USING_ZIG)
       execute_process(COMMAND ${ZIG_PATH} version OUTPUT_VARIABLE ZIG_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
       if (ZIG_VERSION VERSION_EQUAL 0.13.0)
         if (PATCH_ZIGLANG_0_13_0_STACK_PROBE)
-          message(WARNING "Patching zig's ${Python_SITELIB}/ziglang/lib/compiler_rt/stack_probe.zig file to https://github.com/rsepassi/zig/blob/ca589fd41e37fd1dbd863eea33da9365ac7a3ac5/lib/compiler_rt/stack_probe.zig to avoid a bug. See https://github.com/ziglang/zig/pull/20138 and https://github.com/ziglang/zig/issues/15107 for details.")
+          # Get path to zig and patch stack_probe.zig
+          cmake_path(REMOVE_FILENAME ZIG_PATH OUTPUT_VARIABLE ZIGLANG_DIR)
+          message(WARNING "Patching zig's ${ZIGLANG_DIR}/lib/compiler_rt/stack_probe.zig file to https://github.com/rsepassi/zig/blob/ca589fd41e37fd1dbd863eea33da9365ac7a3ac5/lib/compiler_rt/stack_probe.zig to avoid a bug. See https://github.com/ziglang/zig/pull/20138 and https://github.com/ziglang/zig/issues/15107 for details.")
           file(DOWNLOAD https://raw.githubusercontent.com/rsepassi/zig/ca589fd41e37fd1dbd863eea33da9365ac7a3ac5/lib/compiler_rt/stack_probe.zig stack_probe.zig EXPECTED_MD5;aa82aa00300cc51aa0aa9f702c43e903 SHOW_PROGRESS)
-          execute_process(COMMAND ${CMAKE_COMMAND} -E copy stack_probe.zig ${Python_SITELIB}/ziglang/lib/compiler_rt/stack_probe.zig)
+          execute_process(COMMAND ${CMAKE_COMMAND} -E copy stack_probe.zig ${ZIGLANG_DIR}/lib/compiler_rt/stack_probe.zig)
         else()
           message(WARNING "Zig version ${ZIG_VERSION} detected which has a linkage bug on Windows (https://github.com/ziglang/zig/pull/20138). If compilation fails, please use a later version, patch as per the github link, or enable automatic patching by setting PATCH_ZIGLANG_0_13_0_STACK_PROBE=ON.")
         endif()
