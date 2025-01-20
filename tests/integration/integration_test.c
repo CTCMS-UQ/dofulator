@@ -49,7 +49,11 @@ void rotate_system(Quaternion q, Test* test) {
   Quaternion q_conj = quat_conj(q);
   // Set up auxiliary system as ground truth.
   Dofulator ctx = dofulator_create(test->atoms.n);
-  for (Bond* b = test->bonds.bonds; b < test->bonds.bonds + test->bonds.n; ++b) {
+  for (
+    Bond* b = test->bonds.bonds;
+    test->bonds.bonds && b < test->bonds.bonds + test->bonds.n;
+    ++b
+  ) {
     switch (test->test_type) {
       case RIGID:
         dofulator_build_rigid_fragment(ctx, *b);
@@ -125,7 +129,11 @@ bool run_test(Test* test) {
   DofulatorResult err;
   bool init_success = false;
   const char* iter_msg = "";
-  for (Bond* b = test->bonds.bonds; b < test->bonds.bonds + test->bonds.n; ++b) {
+  for (
+    Bond* b = test->bonds.bonds;
+    test->bonds.bonds && b < test->bonds.bonds + test->bonds.n;
+    ++b
+  ) {
     switch (test->test_type) {
       case RIGID:
         err = dofulator_build_rigid_fragment(ctx, *b);

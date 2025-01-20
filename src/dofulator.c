@@ -909,7 +909,7 @@ DofulatorResult dofulator_precalculate_rigid(Dofulator ctx, const double* mass, 
 
   for (
     size_t ifrag = 0, *n_frags = ctx->n_rigid;
-    n_frags < ctx->n_rigid + ctx->max_rigid_atoms;
+    ctx->n_rigid && n_frags < ctx->n_rigid + ctx->max_rigid_atoms;
     ++n_frags
   ) {
     if (*n_frags == 0) { continue; }
@@ -1037,7 +1037,7 @@ static inline void dofulator_calculate_rigid(Dofulator ctx, const double x[][3])
 static inline DofulatorResult dofulator_calculate_semirigid(Dofulator ctx, const double* mass, const double x[][3]) {
   for (
     size_t ifrag = 0, *n_frags = ctx->n_semirigid;
-    n_frags < ctx->n_semirigid + ctx->max_semirigid_atoms;
+    ctx->n_semirigid && n_frags < ctx->n_semirigid + ctx->max_semirigid_atoms;
     ++n_frags
   ) {
     if (*n_frags == 0) { continue; }
