@@ -11,7 +11,12 @@
 
 // Wrappers for fortran LAPACK calls
 #ifdef LAPACK_FORTRAN_STRLEN_END
+#ifdef FORTRAN_STRLEN
 #define LAPACK_FN_END , FORTRAN_STRLEN, FORTRAN_STRLEN
+#else
+// Assuming size_t  if not specified
+#define LAPACK_FN_END , size_t, size_t
+#endif
 #define LAPACK_CALL_END , 1, 1
 #else
 #define LAPACK_FN_END
