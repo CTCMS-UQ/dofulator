@@ -50,7 +50,7 @@ DOF_ENABLE_PYTHON = "ON"
 DOF_USE_SCIPY_OPENBLAS32 = "ON"
 
 [[tool.scikit-build.overrides]]
-if.any.platform-system = "[(win32)(cygwin)(msys)]"
+if.any.platform-system = "(win32|cygwin|msys)"
 # Enable zig cc in ziglang package of isolated build environment
 # as C compiler to avoid incompatibilities in msvc
 inherit.cmake.define = "append"
