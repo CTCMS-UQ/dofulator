@@ -179,6 +179,9 @@ else()
       break()
     endif()
   endforeach()
+  if (DETECTED_VENDOR STREQUAL "Unknown" AND EXISTS ${BLAS_Accelerate_LIBRARY})
+    set(DETECTED_VENDOR "Accelerate")
+  endif()
   message(STATUS "Detected BLAS vendor: ${DETECTED_VENDOR}")
 
   macro(set_cblas_lapacke_headers CBLAS LAPACKE)
@@ -216,6 +219,9 @@ else()
     target_compile_definitions(dofulator PRIVATE MKL_EXTENSIONS)
     target_include_directories(dofulator PUBLIC $<TARGET_PROPERTY:MKL::MKL,INTERFACE_INCLUDE_DIRECTORIES>)
     target_link_libraries(dofulator PUBLIC $<LINK_ONLY:MKL::MKL>)
+  elseif(DETECTED_VENDOR STREQUAL Accelerate)
+    set_cblas_lapacke_headers("Accelerate/Accelerate.h" "Accelerate/Accelerate.h")
+    target_compile_definitions(dofulator PRIVATE -DACCELERATE_NEW_LAPACK -Dlapack_int=__LAPACK_int)
   else()
     message(WARNING
       "Unsupported BLAS/LAPACK vendor - may not be able to find headers."
@@ -225,7 +231,6 @@ else()
     )
     set_cblas_lapacke_headers("cblas.h" "lapacke.h")
   endif()
-
 endif()
 
 configure_file(${SRC_DIR}/cblas_lapacke.in.h ${CMAKE_BINARY_DIR}/cblas_lapacke.h @ONLY USE_SOURCE_PERMISSIONS)
