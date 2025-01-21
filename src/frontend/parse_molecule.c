@@ -126,12 +126,12 @@ Molecule parse_molecule_file(char* fname) {
     goto error;
   }
   int i, j;
-  for (unsigned b = 0; b < out.bonds.n; ++b) {
+  for (size_t b = 0; b < out.bonds.n; ++b) {
     if (fscanf(fid, "%d%d", &i, &j) != 2) {
       if (feof(fid)) {
-        fprintf(stderr, "Unexpected end of file. Expected %d bonds, got %d.\n", out.bonds.n, b);
+        fprintf(stderr, "Unexpected end of file. Expected %zu bonds, got %zu.\n", out.bonds.n, b);
       } else {
-        fprintf(stderr, "Expected bond as atom index pair. Invalid format for bond %d\n", b+1);
+        fprintf(stderr, "Expected bond as atom index pair. Invalid format for bond %zu\n", b+1);
       }
       goto error;
     }
@@ -144,7 +144,7 @@ Molecule parse_molecule_file(char* fname) {
     int eof_check = skip_to_eol(fid);
     if (b+1 < out.bonds.n && eof_check == EOF) {
       if (feof(fid)) {
-        fprintf(stderr, "Unexpected end of file. Expected %d bonds, got %d.\n", out.bonds.n, b+1);
+        fprintf(stderr, "Unexpected end of file. Expected %zu bonds, got %zu.\n", out.bonds.n, b+1);
       } else {
         fprintf(stderr, "Unexpected error skipping to end of bond line.\n");
       }
