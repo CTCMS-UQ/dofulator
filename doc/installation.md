@@ -37,7 +37,7 @@ Since Mac doesn't add those packages to the system path by default, the
 following flags (or similar) will likely be needed to properly locate the
 installation:
 ```
-cmake .. -DBLA_VENDOR=OpenBLAS -DCMAKE_PREFIX_PATH=/opt/homebrew/Cellar/openblas/<VERSION_NUMBER>/ -DCMAKE_C_FLAGS='-I/opt/homebrew/Cellar/openblas/<VERSION_NUMBER/include'
+cmake .. -DBLA_VENDOR=OpenBLAS -DCMAKE_PREFIX_PATH=/opt/homebrew/Cellar/openblas/<VERSION_NUMBER>/ -DCMAKE_C_FLAGS='-I/opt/homebrew/Cellar/openblas/<VERSION_NUMBER>/include'
 ```
 Make sure to set the correct version number for the version you have installed.
 
