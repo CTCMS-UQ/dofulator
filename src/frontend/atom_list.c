@@ -2,7 +2,7 @@
 
 #include "atom_list.h"
 
-AtomList atom_list_create(unsigned n) {
+AtomList atom_list_create(size_t n) {
   AtomList atoms = {.n = n};
   atoms.x = malloc(sizeof((*atoms.x)) * n);
   if (atoms.x) {

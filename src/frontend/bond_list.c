@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-BondList bond_list_create(unsigned n) {
+BondList bond_list_create(size_t n) {
   Bond* bonds = malloc(sizeof(*bonds) * n);
   if (!bonds) {
     n = 0;

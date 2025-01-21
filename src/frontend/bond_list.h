@@ -11,14 +11,14 @@ extern "C" {
  * List of bonds
 */
 typedef struct BondList {
-  unsigned n;   // Number of bonds
+  size_t n;     // Number of bonds
   Bond* bonds;  // List of atom index pairs
 } BondList;
 
 /*
  * Allocate memory for a bond list with `n` bonds
 */
-BondList bond_list_create(unsigned n);
+BondList bond_list_create(size_t n);
 
 /*
  * Clean up a bond list

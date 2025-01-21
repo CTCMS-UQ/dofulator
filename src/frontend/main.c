@@ -67,7 +67,7 @@ int main(int argc, char* argv[]) {
     }
     if (ctx) {
       fprintf(io.out, "# id\tlabel\tdof_total\tdof_x\t\tdof_y\t\tdof_z\n");
-      for (AtomTag i = 0; i < mol.atoms.n; ++i) {
+      for (size_t i = 0; i < mol.atoms.n; ++i) {
         double dof = dofulator_get_dof_atom(ctx, i);
         double dof_dir[3];
         dofulator_get_dof_atom_directional(ctx, i, dof_dir);

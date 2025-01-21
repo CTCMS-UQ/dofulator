@@ -1,6 +1,7 @@
 #ifndef DOF_ATOM_LIST_H
 #define DOF_ATOM_LIST_H
 
+#include <stddef.h>
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -9,7 +10,7 @@ extern "C" {
  * A list of point masses
 */
 typedef struct AtomList {
-  unsigned n;      // Number of atoms
+  size_t n;        // Number of atoms
   double (*x)[3];  // Positions of each atom
   double *mass;    // Masses of each atom
 } AtomList;
@@ -17,7 +18,7 @@ typedef struct AtomList {
 /*
  * Allocate an atom list with space for `n` atoms.
 */
-AtomList atom_list_create(unsigned n);
+AtomList atom_list_create(size_t n);
 
 /*
  * Clean up an atom list
