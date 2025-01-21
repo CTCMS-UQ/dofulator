@@ -30,16 +30,17 @@ In a HPC environment, this should simply require loading the desired BLAS module
 
 #### Mac Users
 
-On Mac OS, the Accelerate library is currently NOT supported.
-Instead, if you'd rather not use scipy-openblas32, other BLAS implementations
-(e.g. regular OpenBLAS) can be installed via Homebrew.
+On Mac OS, the Accelerate library is supported, and should be chosen by default
+if `DOF_USE_SCIPY_OPENBLAS32=OFF`.
+If instead you'd rather use another BLAS implementation
+(e.g. regular OpenBLAS), this can be installed via Homebrew.
 Since Mac doesn't add those packages to the system path by default, the
 following flags (or similar) will likely be needed to properly locate the
 installation:
 ```
 cmake .. -DBLA_VENDOR=OpenBLAS -DCMAKE_PREFIX_PATH=/opt/homebrew/Cellar/openblas/<VERSION_NUMBER>/ -DCMAKE_C_FLAGS='-I/opt/homebrew/Cellar/openblas/<VERSION_NUMBER>/include'
 ```
-Make sure to set the correct version number for the version you have installed.
+Make sure to set the correct `<VERSION_NUMBER>` for the version you have installed.
 
 #### Windows Users
 
@@ -128,10 +129,9 @@ use your system-installed BLAS and LAPACK libraries with the flag
 `--config-settings=cmake.define.DOF_USE_SCIPY_OPENBLAS32=OFF` (e.g. this may be
 desirable for performance in a HPC environment).
 
-MKL and OpenBLAS have both been tested to work. The Apple Accelerate library
-is NOT currently supported. Other BLAS/LAPACK implementations may work,
-but may require some additional configuration (please submit an issue if you
-encounter problems).
+MKL, OpenBLAS and Apple Accelerate have all been tested to work.
+Other BLAS/LAPACK implementations may work, but may require some additional
+configuration (please submit an issue if you encounter problems).
 If the default implementation found is not the one you want, a particular
 implementation can be chosen on installation, for example to choose MKL:
 ```bash
