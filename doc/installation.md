@@ -45,11 +45,11 @@ Make sure to set the correct version number for the version you have installed.
 
 The default MSVC C compiler does not fully comply with modern C standards, so it is not supported.
 Instead, a simple alternative is to use the [Zig compile C](https://zighelp.org/chapter-4/#zig-cc-zig-c)
-functionality by downloading the Zig compiler and setting `-DZIGLANG_PATH=C:\\path\to\ziglang\`
+functionality by downloading the Zig compiler and setting `-DZIGLANG_PATH=C:\path\to\ziglang\`
 when first configuring CMake, or simply `-DTRY_USING_ZIG=ON` if the
 `zig` binary is already findable by CMake (this is also an option on other platforms).
 If you don't have Zig installed, a simple option is to install the ziglang Python package
-(`pip install ziglang==0.13.0.post1`), and set `-DDOF_USE_PY_ZIGLANG=ON`.
+(`pip install "ziglang==0.13.0.post1"`), and set `-DDOF_USE_PY_ZIGLANG=ON`.
 
 Note, Zig <= 0.13.0 has a linkage bug on Windows which will cause compilation to fail.
 This has been fixed in the main Zig branch, and the fix will be available in later versions,
@@ -59,7 +59,6 @@ but if you can't use a later version, patching the
 for the patch).
 Alternatively, the patch can be applied automatically by setting `-DPATCH_ZIGLANG_0_13_0_STACK_PROBE=ON`
 when configuring CMake.
-
 
 The other alternative is to use the gcc or clang compiler via [MinGW](https://www.mingw-w64.org/),
 [Cygwin](https://cygwin.com/), or [WSL](https://learn.microsoft.com/en-us/windows/wsl/install).
@@ -115,7 +114,7 @@ pip install .
 ```
 or
 ```bash
-pip install .[mdanalysis]
+pip install ".[mdanalysis]"
 ```
 Alternatively, it can be installed directly from the git repository with
 ```bash
