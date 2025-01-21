@@ -21,16 +21,20 @@ See the [tests](tests/frontend) directory for example input (`.xyz`) and output
 (`.dof`) files, or run `dof --help` for more information.
 
 Note, the `dof` program was designed mainly for testing purposes.
-It's likely that the MDAnalysis plugins are more useful, since they enable much broader filetype compatibility.
+It's likely that the MDAnalysis plugins are more useful, since they enable much
+broader filetype compatibility.
 
 
 ## C
 
 The library interface works around a dofulator *context*.
-Rigid and semi-rigid fragments are defined by adding connections to the context.
-Fragments are then finalised, and rigid fragment DoF is pre-calculated from reference geometry.
-From this point, repeated calculations can be made with different configurations of the fragments,
-and the results queried to get the DoF of atoms of interest.
+Rigid and semi-rigid fragments are defined by adding connections to the
+context.
+Fragments are then finalised, and rigid fragment DoF is pre-calculated from
+reference geometry.
+From this point, repeated calculations can be made with different
+configurations of the fragments, and the results queried to get the DoF of
+atoms of interest.
 
 Once [installed](installation.md), the library can be included in your project with
 ```C
@@ -44,7 +48,8 @@ the total number of atoms in the system:
 ```C
 Dofulator ctx = dofulator_create_context(N);
 ```
-`ctx` is an opaque handle, and should be cleaned up at the end with `dofulator_destroy(ctx)`.
+`ctx` is an opaque handle, and should be cleaned up at the end with
+`dofulator_destroy(ctx)`.
 
 
 Rigid bodies can be specified by connecting atoms with `dofulator_build_rigid_fragment(ctx, (Bond){i, j})`.
@@ -63,17 +68,17 @@ only that all atoms in the rigid body are somehow connected to each other by
 separate calls.
 
 
-Semi-rigid fragments are constructed in a similar manner by specifying rigid bonds
-between atoms using `dofulator_add_rigid_bond(ctx, (Bond){i, j})`.
-For example, if atoms 3, 4 and 5 form a water molecule, with 3 as O and 4 and 5 as H atoms,
-then to treat it as having rigid bond lengths but a flexible angle, this would be specified
-using:
+Semi-rigid fragments are constructed in a similar manner by specifying rigid
+bonds between atoms using `dofulator_add_rigid_bond(ctx, (Bond){i, j})`.
+For example, if atoms 3, 4 and 5 form a water molecule, with 3 as O and 4 and 5
+as H atoms, then to treat it as having rigid bond lengths but a flexible angle,
+this would be specified using:
 ```C
 dofulator_add_rigid_bond(ctx, (Bond){3, 4});
 dofulator_add_rigid_bond(ctx, (Bond){3, 5});
 ```
-**IMPORTANT:** Currently, it is not supported for rigid bodies and semi-rigid fragments to
-be connected, and attempting to do so will result in an error.
+**IMPORTANT:** Currently, it is not supported for rigid bodies and semi-rigid
+fragments to be connected, and attempting to do so will result in an error.
 This may be relaxed in future for greater computational efficiency, but for now
 rigid sections of a semi-rigid fragment can be achieved by constraining all DoF
 in that section.
@@ -87,16 +92,16 @@ Once all fragments have been specified, they should be finalised by calling:
 ```C
 dofulator_finalise_fragments(ctx);
 ```
-This prepares the context for DoF calculation, and fragments should not be changed
-after this point (i.e. `dofulator_build_rigid_fragment` and `dofulator_add_rigid_bond`
-should not be called).
-**IMPORTANT:** All functions described below assume that `dofulator_finalise_fragments`
-has been called.
+This prepares the context for DoF calculation, and fragments should not be
+changed after this point (i.e. `dofulator_build_rigid_fragment` and
+`dofulator_add_rigid_bond` should not be called).
+**IMPORTANT:** All functions described below assume that
+`dofulator_finalise_fragments` has been called.
 
 
-If the system has periodic boundaries, these should be specified before any calculations
-using `dofulator_set_pbc(ctx, pbc)`, where `pbc` is a tagged union type which should be
-treated as follows:
+If the system has periodic boundaries, these should be specified before any
+calculations using `dofulator_set_pbc(ctx, pbc)`, where `pbc` is a tagged union
+type which should be treated as follows:
 ```C
 PBC pbc = (PBC){.typ = PBC_NONE}; // Default - no periodicity
 
@@ -118,10 +123,10 @@ pbc = (PBC){
 
 ### Calculating and querying DoF
 
-Since the total atomic DoF of rigid bodies is invariant to translation and rotation,
-and the directional components can be determined along an arbitrary axis once the
-required matrix has been computed, these values are pre-calculated for
-efficiency by calling:
+Since the total atomic DoF of rigid bodies is invariant to translation and
+rotation, and the directional components can be determined along an arbitrary
+axis once the required matrix has been computed, these values are
+pre-calculated for efficiency by calling:
 ```C
 dofulator_precalculate_rigid(ctx, mass, x);
 ```
@@ -165,35 +170,37 @@ double* dof_directions = dofulator_get_dof_atoms_directional(ctx, 4, atoms, NULL
 // }
 ```
 The second argument, `n_atoms`, is the number of atoms in the list.
-The third argument can be set to `NULL`, in which case DoF of the first `n_atoms` atoms is returned.
-A buffer can be passed in as the final argument in place of `NULL`, in which case the result will
-be written to that buffer, and the same pointer will be returned.
+The third argument can be set to `NULL`, in which case DoF of the first
+`n_atoms` atoms is returned.
+A buffer can be passed in as the final argument in place of `NULL`, in which
+case the result will be written to that buffer, and the same pointer will be
+returned.
 Note, it is assumed that the buffer has enough space for `n_atoms` `double`s
 for `dofulator_get_dof_atoms`, or for `3 * n_atoms` `double`s for
 `dofulator_get_dof_atoms_directional`.
-If `NULL` is passed as the buffer (as in the above example), one will be allocated, or `NULL` will be
-returned if the allocation fails.
+If `NULL` is passed as the buffer (as in the above example), one will be
+allocated, or `NULL` will be returned if the allocation fails.
 
 
 ### Considerations for kinematic loops
 
-For topologies with closed kinematic loops, loop closing constraints are handled
-by finding the null space of the matrix $`\mathbf{K}`$ which describes motion along those constraints.
-This is achieved with singular value decomposition by finding the singular values below
-a small fraction of the largest singular value.
-With the default null space threshold value of 0.0, the threshold fraction is
-determined as `DBL_EPSILON` multiplied by the largest dimension of the $`\mathbf{K}`$
-matrix.
-This should be accurate for standard cases, but can be changed if needed using
-`dofulator_set_null_space_thresh(ctx, thresh)`.
+For topologies with closed kinematic loops, loop closing constraints are
+handled by finding the null space of the matrix $`\mathbf{K}`$ which describes
+motion along those constraints.
+This is achieved with singular value decomposition by finding the singular
+values below a small fraction of the largest singular value. With the default
+null space threshold value of 0.0, the threshold fraction is determined as
+`DBL_EPSILON` multiplied by the largest dimension of the $`\mathbf{K}`$ matrix.
+This should be accurate for standard cases, but can be changed if needed to a
+fixed fraction using `dofulator_set_null_space_thresh(ctx, thresh)`.
 Internally, the absolute value of `thresh` is taken, and is then clamped to a
 maximum of 1, so higher values will be interpreted as 1, and negative values
 will be interpreted as positive.
 The current value can be queried with `thresh = dofulator_get_null_space_thresh(ctx)`.
-For some topologies that result in a $`\mathbf{K}`$ matrix where numerical precision
-becomes a problem, it may be necessary to raise the cut-off in order to get the
-correct total number of DoF, although such cases are very unlikely in
-practice.
+For some topologies that result in a $`\mathbf{K}`$ matrix where numerical
+precision becomes a problem, it may be necessary to raise the cut-off in order
+to get the correct total number of DoF, although such cases are very unlikely
+in practical systems.
 
 
 ### Querying fragments
@@ -404,22 +411,27 @@ t = LocalTemperature(
 
 t.run()
 ```
-Note, the atom list passed in to the `MDADofulator` class when it was constructed *MUST*
-contain all atoms which may possibly be selected by any of the selections.
+Note, the atom list passed in to the `MDADofulator` class when it was
+constructed *MUST* contain all atoms which may possibly be selected by any of
+the selections.
 
-Care should be taken when using selections which may sometimes be empty (e.g. very small spatial bins).
-Division by the zero DoF in those selections will result in `nan` or `inf` temperatures,
-the handling of which should be carefully considered.
+Care should be taken when using selections which may sometimes be empty (e.g.
+very small spatial bins). Division by the zero DoF in those selections will
+result in `nan` or `inf` temperatures, the handling of which should be
+carefully considered.
 
-For some constraint topologies, the total DoF of a given atom does not vary greatly
-as the molecule moves, and hence it can be useful for performance reasons to pre-calculate
-DoF (e.g. from the equilibrium molecular geometry) and use a fixed value for `LocalTemperature`.
-This approach works best when selections contain a relatively large number of the same molecule,
-and are not biased towards a particular section of the molecule, so that any random fluctuations
-will tend to cancel on average. However, care should be taken with inhomogeneous systems where
-molecules may have different average geometries in different regions.
+For some constraint topologies, the total DoF of a given atom does not vary
+greatly as the molecule moves, and hence it can be useful for performance
+reasons to pre-calculate DoF (e.g. from the equilibrium molecular geometry) and
+use a fixed value for `LocalTemperature`. This approach works best when
+selections contain a relatively large number of the same molecule, and are not
+biased towards a particular section of the molecule, so that any random
+fluctuations will tend to cancel on average. However, care should be taken with
+inhomogeneous systems where molecules may have different average geometries in
+different regions.
 
-To use a fixed DoF value instead of an `MDADofulator` object, simply pass in a Numpy array containing
-the DoF of each atom that might be included in the selections, indexed by `atom.ix`.
-`d.result[0]` from the previous section would be suitable for this if the first frame contained molecules in their
+To use a fixed DoF value instead of an `MDADofulator` object, simply pass in a
+Numpy array containing the DoF of each atom that might be included in the
+selections, indexed by `atom.ix`. `d.result[0]` from the previous section may
+be suitable for this if the first frame contained molecules in their
 equilibrium geometry.
