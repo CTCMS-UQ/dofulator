@@ -83,16 +83,15 @@ this would be specified using:
 dofulator_add_rigid_bond(ctx, (Bond){3, 4});
 dofulator_add_rigid_bond(ctx, (Bond){3, 5});
 ```
-**IMPORTANT:** Currently, it is not supported for rigid bodies and semi-rigid
-fragments to be connected, and attempting to do so will result in an error.
-This may be relaxed in future for greater computational efficiency, but for now
-rigid sections of a semi-rigid fragment can be achieved by constraining all DoF
-in that section.
-For example, to treat the water molecule above as rigid, an additional
-rigid bond constraining the angle could be added with:
-```C
-dofulator_add_rigid_bond(ctx, (Bond){4, 5});
-```
+> [!IMPORTANT]
+> Currently, it is not supported for rigid bodies and semi-rigid
+> fragments to be connected, and attempting to do so will result in an error.
+> This may be relaxed in future for greater computational efficiency, but for now
+> rigid sections of a semi-rigid fragment can be achieved by constraining all DoF
+> in that section.
+> For example, to treat the water molecule above as rigid, an additional
+> rigid bond constraining the angle could be added with:
+> `dofulator_add_rigid_bond(ctx, (Bond){4, 5});`
 
 Once all fragments have been specified, they should be finalised by calling:
 ```C
@@ -101,8 +100,9 @@ dofulator_finalise_fragments(ctx);
 This prepares the context for DoF calculation, and fragments should not be
 changed after this point (i.e. `dofulator_build_rigid_fragment` and
 `dofulator_add_rigid_bond` should not be called).
-**IMPORTANT:** All functions described below assume that
-`dofulator_finalise_fragments` has been called.
+> [!IMPORTANT]
+> All functions described below assume that `dofulator_finalise_fragments` has
+> been called.
 
 
 If the system has periodic boundaries, these should be specified before any
@@ -156,9 +156,10 @@ double total_atom_dof = dofulator_get_dof_atom(ctx, atom_index);
 double directional_dof[3];
 dofulator_get_dof_atom_directional(ctx, atom_index, directional_dof);
 ```
-**IMPORTANT:** If `dofulator_build_rigid_fragment` has been called, then
-`dofulator_precalculate_rigid` MUST be called before the first call to
-`dofulator_calculate`.
+> [!IMPORTANT]
+> If `dofulator_build_rigid_fragment` has been called, then
+> `dofulator_precalculate_rigid` MUST be called before the first call to
+> `dofulator_calculate`.
 
 
 If DoF of a list of atoms is required, this can be queried through
