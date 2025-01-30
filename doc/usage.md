@@ -24,6 +24,12 @@ Note, the `dof` program was designed mainly for testing purposes.
 It's likely that the MDAnalysis plugins are more useful, since they enable much
 broader filetype compatibility.
 
+> [!IMPORTANT]
+> On **Windows**, if the BLAS/LAPACK library .dll file is not in a standard
+> directory (e.g. in a conda environment or if using scipy-openblas32), the
+> directory containing that .dll will need to be added to `PATH` for `dof.exe`
+> to find it correctly. For example, `PATH=C:\path\to\scipy_openblas32\lib;%PATH%`.
+
 
 ## C
 
@@ -259,6 +265,13 @@ compatible with MDAnalysis.
 In most cases, the latter (described in the [next section](#MDAnalysis)) will be the simplest to use.
 The former is simply a thin layer around the underlying C interface with some convenience functions.
 
+> [!IMPORTANT]
+> On **Windows**, if the BLAS/LAPACK library .dll file is not in a standard
+> directory (e.g. in a conda environment), the directory containing that .dll
+> will need to be added to `PATH` for it to be found by the `dofulator` module.
+> This is handled automatically in the case that scipy-openblas32 is used (the
+> default when installing with `pip install`), but must otherwise be done manually.
+
 To create a context
 ```python
 from dofulator import Dofulator
@@ -435,3 +448,4 @@ Numpy array containing the DoF of each atom that might be included in the
 selections, indexed by `atom.ix`. `d.result[0]` from the previous section may
 be suitable for this if the first frame contained molecules in their
 equilibrium geometry.
+
