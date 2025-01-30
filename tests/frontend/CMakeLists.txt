@@ -13,7 +13,7 @@ foreach(XYZ IN ITEMS ${FRONTEND_TEST_INPUT})
   )
   add_test(
     NAME frontend::check_${FRONTEND_TEST}
-    COMMAND ${CMAKE_COMMAND} -E compare_files ${FRONTEND_TEST_REF} ${FRONTEND_TEST_OUTPUT}
+    COMMAND ${CMAKE_COMMAND} -E compare_files --ignore-eol ${FRONTEND_TEST_REF} ${FRONTEND_TEST_OUTPUT}
   )
   set_tests_properties(frontend::run_${FRONTEND_TEST}   PROPERTIES FIXTURES_SETUP    f_${FRONTEND_TEST})
   set_tests_properties(frontend::check_${FRONTEND_TEST} PROPERTIES FIXTURES_REQUIRED f_${FRONTEND_TEST})

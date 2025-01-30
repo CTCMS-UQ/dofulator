@@ -14,7 +14,9 @@ int skip_to_eol(FILE* fid) {
 Molecule parse_molecule_file(char* fname) {
   Molecule out = (Molecule){.atoms = {.n = 0}, .bonds = {.n = 0}};
 
-  FILE* fid = fopen(fname, "r");
+  // Open in binary mode to avoid fgetpos/ftell bug in MSVC standard library:
+  // https://github.com/microsoft/STL/issues/1784
+  FILE* fid = fopen(fname, "rb");
   if (!fid) {
     fprintf(stderr, "Error opening file:\n%s\n", fname);
     return out;
@@ -56,9 +58,10 @@ Molecule parse_molecule_file(char* fname) {
   unsigned idx_tot = 0;
   for (unsigned i = 0; i < out.atoms.n; ++i) {
     // Try without atom label first, or roll back to include one
-    const long fptr = ftell(fid);
+    fpos_t fptr;
+    fgetpos(fid, &fptr);
     if (fscanf(fid, "%d %lf %lf %lf %lf", &idx, &mass, &x, &y, &z) != 5) {
-      if (fseek(fid, fptr, SEEK_SET)) {
+      if (fsetpos(fid, &fptr)) {
         fprintf(stderr, "Error retrying line with label");
         goto error;
       }
