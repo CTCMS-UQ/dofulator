@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.25)
 ################################################################################
 
 set(ENABLE_LTO ON CACHE BOOL "Enable link-time optimisation if supported")
+set(NATIVE_BUILD OFF CACHE BOOL "Build for native cpu. Sets -march=native -mtune=native")
 
 set(ENABLE_TESTING OFF CACHE BOOL "Compile unit and integration tests")
 set(ENABLE_ASAN OFF CACHE BOOL "Add -fsanitize=address -fno-omit-frame-pointer")
@@ -112,6 +113,10 @@ endif()
 
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF CACHE BOOL "Use compiler extensions")
+
+if (NATIVE_BUILD)
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native -mtune=native")
+endif()
 
 set(SRC_DIR ${PROJECT_SOURCE_DIR}/src)
 set(INCLUDE_DIRS ${INCLUDE_DIRECTORIES} ${SRC_DIR})
