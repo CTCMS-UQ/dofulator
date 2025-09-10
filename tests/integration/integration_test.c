@@ -24,7 +24,7 @@ bool check_result(Dofulator ctx, Test* test, bool current_result) {
   for (size_t i = 0; i < test->atoms.n; ++i) {
     double dof_atom = 0.0;
     double dof[3];
-    dofulator_get_dof_atom_directional(ctx, i, dof);
+    dofulator_get_dof_atom_directional(ctx, i, DOF_ALL, dof);
     for (unsigned d = 0; d < 3; ++d) {
       if (!feql(dof[d], test->dof[i][d])) {
         if (result) printf("FAILED\n");
@@ -34,7 +34,7 @@ bool check_result(Dofulator ctx, Test* test, bool current_result) {
       }
       dof_atom += test->dof[i][d];
     }
-    double dof_atom_actual = dofulator_get_dof_atom(ctx, i);
+    double dof_atom_actual = dofulator_get_dof_atom(ctx, i, DOF_ALL);
     if (!feql(dof_atom, dof_atom_actual)) {
       if (result) printf("FAILED\n");
       printf("\t! Atom %zu expected %.16g DoF total, got %.16g\n",
@@ -78,7 +78,7 @@ void rotate_system(Quaternion q, Test* test) {
     case RIGID:
       // Store result for comparison
       for (size_t i = 0; i < test->atoms.n; ++i) {
-        dofulator_get_dof_atom_directional(ctx, i, test->dof[i]);
+        dofulator_get_dof_atom_directional(ctx, i, DOF_ALL, test->dof[i]);
       }
       break;
     case FLEX:;

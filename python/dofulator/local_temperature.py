@@ -12,6 +12,7 @@ class LocalTemperature(AnalysisBase):
         selections: Iterable[mda.AtomGroup],
         dof: MDADofulator|np.ndarray|None = None,
         mode: str = 'atomic',
+        dof_modes: str = 'all',
         store_dof_results: bool = False,
         verbose: bool = True,
     ):
@@ -45,6 +46,13 @@ class LocalTemperature(AnalysisBase):
                  of each selection.
             'directional': Use directional DoF to calculate x,y,z kinetic temperatures.
 
+        `dof_modes'`: `'all'|'translational'|'non-translational'`
+            Passed through to `MDADofulator` instance - determines which modes to include
+            for temperature calculation.
+            'all': Use all modes
+            'translational': Use translational modes only (temperature calculated from CoM velocity)
+            'non-translational': Use rotational/vibrational modes only (temperature calculated from v - v_com)
+
         `store_dof_results`: `bool` (default False)
             Set `True` if the direct results from `dofulator` are also required,
             otherwise they will be discarded after each frame.
@@ -59,6 +67,7 @@ class LocalTemperature(AnalysisBase):
         )
         self.dof = dof
         self.mode = mode
+        self.dof_modes = dof_modes
         self.store_dof_results = store_dof_results
         self.boltz = mda.units.constants['Boltzmann_constant']
 
@@ -77,6 +86,7 @@ class LocalTemperature(AnalysisBase):
             raise Exception(f"Invalid mode '{self.mode}'. Must be one of 'atomic' or 'directional'")
 
     def _single_frame_atomic(self):
+        from .c_dofulator import modes_from_str
         if isinstance(self.dof, MDADofulator):
             self._dof_buf = np.zeros((max((sel.n_atoms for sel in self.selections)),))
             if self.store_dof_results:
@@ -87,22 +97,53 @@ class LocalTemperature(AnalysisBase):
                 # duplicate work querying atomic DoF
                 self.dof._calculate()
 
+        if self.dof_modes != 'all':
+            # Remove translational or rotational/vibrational component from velocities
+            # Translational DoF is 3x mass fraction, so use that to sum up CoM velocity
+            # TODO: this could be made faster by moving to C/Cython
+            if not isinstance(self.dof, MDADofulator):
+                raise Exception("dof_modes must be 'all' if DoF is not calculated by an `MDADofulator` instance")
+            dof_trans = self.dof._ctx.get_all_dof(mode=modes_from_str('translational')) / 3
+            velocities = self.dof._atomgroup.velocities.copy()
+            if self.dof_modes == 'translational':
+                for frag in self.dof._ctx.get_fragments():
+                    v = np.zeros((3,))
+                    for a in frag.atoms():
+                        v += dof_trans[a] * velocities[a,:]
+                    for a in frag.atoms():
+                        velocities[a,:] = v
+            else:
+                for frag in self.dof._ctx.get_fragments():
+                    v = np.zeros((3,))
+                    for a in frag.atoms():
+                        v += dof_trans[a] * velocities[a,:]
+                    for a in frag.atoms():
+                        velocities[a,:] -= v
+
         for i, sel in enumerate(self.selections):
             if self.dof is None:
                 # No DoF provided. Assume 3 per atom.
                 dof = 3 * len(sel)
             elif isinstance(self.dof, MDADofulator):
                 # DoF from dofulator
-                dof = np.sum(self.dof._ctx.get_all_dof(sel.ix, self._dof_buf))
+                dof = np.sum(self.dof._ctx.get_all_dof(sel.ix, self._dof_buf, modes_from_str(self.dof_modes)))
             else:
                 # DoF from array of constants
                 dof = np.sum(self.dof[sel.ix])
+
             # Calculate m*v*v / d. Apply Boltzmann factor later.
-            self.results[self._frame_index, i] = np.sum(
-                sel.masses * np.sum(sel.velocities**2, axis=1)
-            ) / dof
+            if self.dof_modes == 'all':
+                self.results[self._frame_index, i] = np.sum(
+                    sel.masses * np.sum(sel.velocities**2, axis=1)
+                ) / dof
+            else:
+                self.results[self._frame_index, i] = np.sum(
+                    sel.masses * np.sum(velocities[sel.ix]**2, axis=1)
+                ) / dof
+
 
     def _single_frame_directional(self):
+        from .c_dofulator import modes_from_str
         if isinstance(self.dof, MDADofulator):
             self._dof_buf = np.zeros((max((sel.n_atoms for sel in self.selections)),3))
             if self.store_dof_results:
@@ -113,13 +154,36 @@ class LocalTemperature(AnalysisBase):
                 # duplicate work querying atomic DoF
                 self.dof._calculate()
 
+        if self.dof_modes != 'all':
+            # Remove translational or rotational/vibrational component from velocities
+            # Translational DoF is 3x mass fraction, so use that to sum up CoM velocity
+            # TODO: this could be made faster by moving to C/Cython
+            if not isinstance(self.dof, MDADofulator):
+                raise Exception("dof_modes must be 'all' if DoF is not calculated by an `MDADofulator` instance")
+            dof_trans = self.dof._ctx.get_all_dof(mode=modes_from_str('translational')) / 3
+            velocities = self.dof._atomgroup.velocities.copy()
+            if self.dof_modes == 'translational':
+                for frag in self.dof._ctx.get_fragments():
+                    v = np.zeros((3,))
+                    for a in frag.atoms():
+                        v += dof_trans[a] * velocities[a,:]
+                    for a in frag.atoms():
+                        velocities[a,:] = v
+            else:
+                for frag in self.dof._ctx.get_fragments():
+                    v = np.zeros((3,))
+                    for a in frag.atoms():
+                        v += dof_trans[a] * velocities[a,:]
+                    for a in frag.atoms():
+                        velocities[a,:] -= v
+
         for i, sel in enumerate(self.selections):
             if self.dof is None:
                 # No DoF provided. Assume 3 per atom.
                 dof = [len(sel)] * 3
             elif isinstance(self.dof, MDADofulator):
                 # DoF from dofulator
-                dof = np.sum(self.dof._ctx.get_all_dof_directional(sel.ix, self._dof_buf), axis=0)
+                dof = np.sum(self.dof._ctx.get_all_dof_directional(sel.ix, self._dof_buf, modes_from_str(self.dof_modes)), axis=0)
             else:
                 # DoF from array of constants not supported since values will quickly vary
                 raise Exception("Directional temperature with constant DoF not supported. "
@@ -128,7 +192,10 @@ class LocalTemperature(AnalysisBase):
 
             # Calculate m*v*v / d. Apply Boltzmann factor later.
             mass = np.repeat(np.reshape(sel.masses, (len(sel.masses), 1)), 3, axis=1)
-            self.results[self._frame_index, i] = np.sum(mass * sel.velocities**2, axis=0) / dof
+            if self.dof_modes == 'all':
+                self.results[self._frame_index, i] = np.sum(mass * sel.velocities**2, axis=0) / dof
+            else:
+                self.results[self._frame_index, i] = np.sum(mass * velocities[sel.ix]**2, axis=0) / dof
 
     def _conclude(self):
         self.results /= self.boltz

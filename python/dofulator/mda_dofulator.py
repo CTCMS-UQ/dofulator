@@ -21,6 +21,7 @@ class MDADofulator(AnalysisBase):
         rigid_angles: str|Iterable[Angle]|None = None,
         rigid_dihedrals: str|Iterable[Dihedral]|None = None,
         mode: str = 'atomic',
+        dof_modes: str = 'all',
         verbose: bool = True,
         null_space_thresh: float|None = None,
         use_pbc: bool = True,
@@ -44,6 +45,10 @@ class MDADofulator(AnalysisBase):
         total DoF per atom (`atomic`) or the DoF in each Cartesian direction
         ('directional')
 
+        `dof_mode`: `'all'|'translational'|'non-translational'` sets whether to include
+        contirbutions from all modes, translational modes only, or non-translational modes,
+        respectively.
+
         `null_space_thresh`: Threshold for calculating null space of loop closure matrix.
         Sanitised to be between 0. and 1. using `min(abs(thresh), 1.)`.
         `None|0` = use default from core C library (DBL_EPSILON * largest dimension of loop closure matrix).
@@ -53,6 +58,7 @@ class MDADofulator(AnalysisBase):
         super(MDADofulator, self).__init__(atomgroup.universe.trajectory, verbose=verbose)
         self._atomgroup = atomgroup
         self.mode = mode
+        self.dof_modes = dof_modes
         self.null_space_thresh = null_space_thresh
         self.use_pbc = use_pbc
         self.set_rigid_bodies(rigid_bodies)
@@ -74,6 +80,14 @@ class MDADofulator(AnalysisBase):
     def null_space_thresh(self, thresh: float|None):
         self._null_space_thresh = min(abs(thresh), 1.) if thresh is not None else None
 
+    @property
+    def dof_modes(self):
+        return self._dof_modes
+
+    @dof_modes.setter
+    def dof_modes(self, dof_modes: str):
+        from .c_dofulator import modes_from_str
+        self._dof_modes = modes_from_str(dof_modes)
 
     def set_rigid_bodies(self, rigid_bodies: str|ResidueGroup|Iterable[Residue|Iterable[Atom]]|None = None):
         """
@@ -250,10 +264,10 @@ class MDADofulator(AnalysisBase):
         self._calculate()
         if self.results.ndim == 2:
             # mode == 'atomic'
-            self._ctx.get_all_dof(self._atomgroup.ix, self.results[self._frame_index, :])
+            self._ctx.get_all_dof(self._atomgroup.ix, self.results[self._frame_index, :], self.dof_modes)
         else:
             # mode == 'directional'
-            self._ctx.get_all_dof_directional(self._atomgroup.ix,self.results[self._frame_index, :, :])
+            self._ctx.get_all_dof_directional(self._atomgroup.ix,self.results[self._frame_index, :, :], self.dof_modes)
 
     def _conclude(self):
         pass
@@ -264,4 +278,30 @@ class MDADofulator(AnalysisBase):
         self._prepare()
         self._single_frame()
         self._conclude()
+
+    def current_frame_dof(self, mode: str|None = None, dof_modes: str|None = None):
+        """
+        Get the atomic or directional DoF of all atoms in the specified modes using
+        their conformation on the current frame.
+
+        WARNING: Assumes DoF has already been calculated on this frame, either with
+                 `self.run()` or `self.run_single_frame()`.
+
+        `mode` = `'atomic'|'directional'` specifies whether atomic or directional DoF is required
+        or use current setting if `None` is specified (default)
+        
+        'dof_modes' = `'all'|'translational'|'non-translational'` specifies which modes to include
+        or use current setting if `None` is specified (default)
+        """
+        if mode is None:
+            mode = self.mode
+        if dof_modes is None:
+            dof_modes = self._dof_modes
+        else:
+            from .c_dofulator import modes_from_str
+            dof_modes = modes_from_str(dof_modes)
+        if mode == 'atomic':
+            return self._ctx.get_all_dof(self._atomgroup.ix, mode=dof_modes)
+        else:
+            return self._ctx.get_all_dof_directional(self._atomgroup.ix, mode=dof_modes)
 

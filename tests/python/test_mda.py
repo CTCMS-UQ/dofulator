@@ -110,6 +110,16 @@ class TestMDADofulator:
                 np.ones((d.results.shape[0],)) * 8,
                 err_msg='Incorrect total DoF with many kinematic loops + overconstrained sections'
             )
+        np.testing.assert_array_almost_equal(
+                d.current_frame_dof('directional', 'translational') + d.current_frame_dof('directional', 'non-translational'),
+                d.current_frame_dof('directional', 'all'),
+                err_msg='Inconsistent partitioning between translational and rotational/vibrational modes'
+            )
+        np.testing.assert_array_almost_equal(
+                np.sum(d.current_frame_dof('directional', 'translational'), axis=0),
+                np.array([1.,1.,1.]),
+                err_msg='Incorrect translational DoF'
+            )
 
     def test_rigid_via_loops(self, bicyclo_conformations):
         """

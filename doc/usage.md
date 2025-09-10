@@ -72,6 +72,10 @@ dofulator_build_rigid_fragment(ctx, (Bond){1, 2});
 Note, it doesn't matter which two atoms are provided for an individual call,
 only that all atoms in the rigid body are somehow connected to each other by
 separate calls.
+If the system is periodic, it is assumed that the rigid body is smaller than
+half the unit cell. If this is not the case, correct results can still be obtained
+by passing in unwrapped coordinates and treating the system without periodicity
+for DoF calculation.
 
 
 Semi-rigid fragments are constructed in a similar manner by specifying rigid
@@ -151,24 +155,47 @@ dofulator_calculate(ctx, mass, x);
 ```
 and then queried for a given atom with
 ```C
-double total_atom_dof = dofulator_get_dof_atom(ctx, atom_index);
+double total_atom_dof = dofulator_get_dof_atom(ctx, atom_index, DOF_ALL);
 
 double directional_dof[3];
-dofulator_get_dof_atom_directional(ctx, atom_index, directional_dof);
+dofulator_get_dof_atom_directional(ctx, atom_index, DOF_ALL, directional_dof);
 ```
 > [!IMPORTANT]
 > If `dofulator_build_rigid_fragment` has been called, then
 > `dofulator_precalculate_rigid` MUST be called before the first call to
 > `dofulator_calculate`.
 
+To isolate the translational DoF, use
+```C
+double atom_trans_dof = dofulator_get_dof_atom(ctx, atom_index, DOF_TRANS);
+```
+or
+```C
+double directional_trans_dof[3];
+dofulator_get_dof_atom_directional(ctx, atom_index, DOF_TRANS, directional_dof);
+```
+and for rotational/vibrational,
+```C
+double atom_non_trans_dof = dofulator_get_dof_atom(ctx, atom_index, DOF_NON_TRANS);
+```
+or
+```C
+double directional_non_trans_dof[3];
+dofulator_get_dof_atom_directional(ctx, atom_index, DOF_NON_TRANS, directional_dof);
+```
+Note, the easiest way to separate rotational and vibrational DoF
+in the case of semi-rigid fragments is to additionally calculate
+the DoF of the fragment as if it were a rigid body, in which
+case `DOF_NON_TRANS` corresponds to the rotational DoF.
+
 
 If DoF of a list of atoms is required, this can be queried through
 ```C
 AtomTag atoms[] = {0, 2, 4, 3};     // List of atom indices to query
-double* dof_totals = dofulator_get_dof_atoms(ctx, 4, atoms, NULL);
+double* dof_totals = dofulator_get_dof_atoms(ctx, 4, atoms, DOF_ALL, NULL);
 // dof_totals = {dof_0, dof_2, dof_4, dof_3}
 
-double* dof_directions = dofulator_get_dof_atoms_directional(ctx, 4, atoms, NULL);
+double* dof_directions = dofulator_get_dof_atoms_directional(ctx, 4, atoms, DOF_ALL, NULL);
 // dof_directions = { \
 //   dof_0_x, dof_0_y, dof_0_z, \
 //   dof_2_x, dof_2_y, dof_2_z, \
@@ -324,6 +351,7 @@ for rigid_body in ctx.get_rigid_fragments():
     for atom_index in rigid_body.atoms():
         do_something()
 ```
+Similarly, all fragments can be iterated over with `ctx.get_fragments()`.
 Note, fragment list iterators and fragment handles (elements returned by an iterator) become
 invalid if the underlying data is modified, which can happen if `ctx.add_rigid_bond(...)`,
 `ctx.build_rigid_fragment(...)`, or `ctx.finalise_fragments(...)` are called.
@@ -376,6 +404,9 @@ d = MDADofulator(
     rigid_dihedrals=rigid_dihedrals,    # As above, 'all' will treat all dihedrals as rigid
     mode='atomic',          # (default) Only calculate total DoF of each atom
                             #   Alternatively, set mode='directional' to get x,y,z DoF
+    dof_modes='all',        # (default) Use DoF from all modes. Alternatively, 'translational' gives
+                            #   translational contributions or 'non-translational' gives rotational/vibrational
+                            #   contributions.
     verbose=True,           # (default), set `False` to disable progress bar (as for other MDA classes)
     null_space_thresh=None, # (default) - Use the C default value for null space threshold.
                             #   See above "Considerations for kinematic loops" for details of
@@ -397,6 +428,12 @@ d.run()
 # d.results is a 3D numpy array, indexed as `d.results[frame_id, atom_id, dir]`,
 # where `dir` is 0, 1 or 2 for x, y or z DoF component.
 ```
+
+To query atomic/directional, translational or rotational/vibrational DoF components
+on the current frame of the trajectory once the frame has already been processed
+with `d.run()` or `d.run_single_frame()`, `d.current_frame_dof()` is provided.
+For example, to get the directional contributions of rotational/vibrational modes,
+use `d.current_frame_dof('directional', 'non-translational')`.
 
 To calculate local temperatures, a `LocalTemperature` analysis class is provided,
 where each local temperature is defined by an
@@ -420,6 +457,9 @@ t = LocalTemperature(
     store_dof_results=False,    # (default) Set True to also store the DoF values in d.results (slower)
     mode='atomic',              # (default) Calculate total temperature of each selection.
                                 #   Set mode='directional' to calculate directional temperatures.
+    dof_modes='all',            # (default) Calculate temperature of all modes
+                                #   Set dof_modes='translational' for translational temperature,
+                                #   or dof_modes='non-translational' for rotational + vibrational temperature
     verbose=True,               # (default) as above
     )
 

@@ -49,6 +49,11 @@ cdef extern from "dofulator.h":
         DOF_MIXED_RIGID_SEMIRIGID
         DOF_LAPACK_ERROR
 
+    cdef enum DOFMode:
+        DOF_ALL
+        DOF_TRANS
+        DOF_NON_TRANS
+
     Dofulator dofulator_create(AtomTag n_atoms)
     void dofulator_destroy(Dofulator* ctx)
     void dofulator_set_pbc(Dofulator ctx, PBC pbc)
@@ -62,11 +67,11 @@ cdef extern from "dofulator.h":
     DofulatorResult dofulator_precalculate_rigid(Dofulator ctx, const double* mass, const double x[][3])
     DofulatorResult dofulator_calculate(Dofulator ctx, const double* mass, const double x[][3])
 
-    void dofulator_get_dof_atom_directional(const void* ctx, AtomTag atom_idx, double dof[3])
-    double dofulator_get_dof_atom(const void* ctx, AtomTag atom_idx)
+    void dofulator_get_dof_atom_directional(const void* ctx, AtomTag atom_idx, DOFMode mode, double dof[3])
+    double dofulator_get_dof_atom(const void* ctx, AtomTag atom_idx, DOFMode mode)
 
-    double* dofulator_get_dof_atoms(void* ctx, const size_t n_atoms, const AtomTag* atoms, double* dof);
-    double* dofulator_get_dof_atoms_directional(void* ctx, const size_t n_atoms, const AtomTag* atoms, double dof[][3]);
+    double* dofulator_get_dof_atoms(void* ctx, const size_t n_atoms, const AtomTag* atoms, DOFMode mode, double* dof);
+    double* dofulator_get_dof_atoms_directional(void* ctx, const size_t n_atoms, const AtomTag* atoms, DOFMode mode, double dof[][3]);
 
     FragmentListIter dofulator_get_rigid_fragments(const void* ctx);
     FragmentListIter dofulator_get_semirigid_fragments(const void* ctx);

@@ -5,8 +5,17 @@ import numpy
 cimport numpy
 numpy.import_array()
 
+import itertools
+
 cimport dofulator.c_dofulator as dof
-from dofulator.c_dofulator cimport Dofulator, AtomTag, Bond, FragmentListIter, AtomListView, DofulatorResult
+from dofulator.c_dofulator cimport Dofulator, AtomTag, Bond, FragmentListIter, AtomListView, DofulatorResult, DOFMode
+
+def modes_from_str(mode: str):
+    return {
+        'all': DOF_ALL,
+        'translational': DOF_TRANS,
+        'non-translational': DOF_NON_TRANS,
+    }[mode]
 
 def get_exception(DofulatorResult err):
     if err == DofulatorResult.DOF_SUCCESS:
@@ -166,22 +175,28 @@ cdef class CDofulator:
         if err != DofulatorResult.DOF_SUCCESS:
             raise get_exception(err)
 
-    def get_dof(self, AtomTag i):
+    def get_dof(self, AtomTag i, DOFMode mode = DOF_ALL):
         """
-        Get the total DoF of atom with index `i`.
+        Get the DoF of atom with index `i`.
+        `mode = DOF_ALL`: get total DoF
+        `mode = DOF_TRANS`: get total translational DoF
+        `mode = DOF_NON_TRANS`: get total rotational + vibrational DoF
         """
         if i >= self.n_atoms:
             raise IndexError
-        return dof.dofulator_get_dof_atom(self.ctx, i)
+        return dof.dofulator_get_dof_atom(self.ctx, i, mode)
 
-    def get_dof_directional(self, AtomTag i):
+    def get_dof_directional(self, AtomTag i, DOFMode mode = DOF_ALL):
         """
         Get the DoF of atom with index `i` in each Cartesian direction
+        `mode = DOF_ALL`: get total DoF from all modes
+        `mode = DOF_TRANS`: get translational DoF
+        `mode = DOF_NON_TRANS`: get DoF from rotational + vibrational modes
         """
         if i >= self.n_atoms:
             raise IndexError
         cdef double[3] d
-        dof.dofulator_get_dof_atom_directional(self.ctx, i, d)
+        dof.dofulator_get_dof_atom_directional(self.ctx, i, mode, d)
         return (d[0], d[1], d[2])
 
     def get_rigid_fragments(self):
@@ -200,9 +215,15 @@ cdef class CDofulator:
         frags._iter = dofulator_get_semirigid_fragments(self.ctx)
         return frags
 
-    def get_all_dof(self, atoms=None, buffer=None):
+    def get_fragments(self):
         """
-        Get DoF of all atoms in `atoms`.
+        Get iterator over all fragments - rigid first, then semi-rigid
+        """
+        return itertools.chain(self.get_rigid_fragments(), self.get_semirigid_fragments())
+
+    def get_all_dof(self, atoms=None, buffer=None, mode: DOFMode=DOF_ALL):
+        """
+        Get DoF of all atoms in `atoms` in modes given by `mode`.
         Optionally store result directly in `buffer`, which should be of type `np.float64`
         If `atoms` is `None`, gets DoF of all atoms (index 0 to self.n_atoms-1)
         """
@@ -213,33 +234,39 @@ cdef class CDofulator:
             N = len(atoms)
         if buffer is None:
             buf = numpy.empty((N,), dtype=numpy.float64, order='C')
-            self._get_all_dof(atoms, buf)
+            self._get_all_dof(atoms, buf, mode)
             return buf
         if buffer.shape[0] < N:
             raise IndexError("`buffer` must have space for at least as many items in `atoms`")
-        self._get_all_dof(atoms, buffer)
+        self._get_all_dof(atoms, buffer, mode)
         # Return slice of buffer in case it was longer than N
         return buffer[:N]
 
-    def _get_all_dof(self, numpy.ndarray[numpy.int64_t,ndim=1] atoms, numpy.ndarray[numpy.float64_t,ndim=1] buffer):
+    def _get_all_dof(
+        self,
+        numpy.ndarray[numpy.int64_t,ndim=1] atoms,
+        numpy.ndarray[numpy.float64_t,ndim=1] buffer,
+        DOFMode mode
+    ):
         cdef AtomTag i
         cdef AtomTag N
         cdef double* buf = cython.cast(cython.pointer(double), buffer.data)
         # Can ignore result since only throws error if NULL buffer is passed
         if atoms is None:
-            dof.dofulator_get_dof_atoms(self.ctx, buffer.shape[0], cython.NULL, buf)
+            dof.dofulator_get_dof_atoms(self.ctx, buffer.shape[0], cython.NULL, mode, buf)
         else:
             atoms = numpy.ascontiguousarray(atoms)
             dof.dofulator_get_dof_atoms(
                 self.ctx,
                 atoms.shape[0],
                 cython.cast(cython.pointer(AtomTag), atoms.data),
+                mode,
                 buf
             )
 
-    def get_all_dof_directional(self, atoms=None, buffer=None):
+    def get_all_dof_directional(self, atoms=None, buffer=None, mode: DOFMode = DOF_ALL):
         """
-        Get directional DoF of all atoms in `atoms`.
+        Get directional DoF of all atoms in `atoms` from modes given by `mode`.
         Optionally store result directly in `buffer`, which should be an n x 3 array of type `np.float64`
         If `atoms` is `None`, gets DoF of all atoms (index 0 to self.n_atoms-1)
         """
@@ -250,27 +277,33 @@ cdef class CDofulator:
             N = len(atoms)
         if buffer is None:
             buf = numpy.empty((N, 3), dtype=numpy.float64, order='C')
-            self._get_all_dof_directional(atoms, buf)
+            self._get_all_dof_directional(atoms, buf, mode)
             return buf
         if buffer.shape[1] != 3 or buffer.shape[0] < N:
             raise IndexError("`buffer` must have at least as many rows as `atoms`, and exactly 3 columns")
-        self._get_all_dof_directional(atoms, buffer)
+        self._get_all_dof_directional(atoms, buffer, mode)
         # Return slice of buffer in case it was longer than N
         return buffer[:N,:]
 
-    def _get_all_dof_directional(self, numpy.ndarray[numpy.int64_t,ndim=1] atoms, numpy.ndarray[numpy.float64_t,ndim=2,mode='c'] buffer):
+    def _get_all_dof_directional(
+        self,
+        numpy.ndarray[numpy.int64_t,ndim=1] atoms,
+        numpy.ndarray[numpy.float64_t,ndim=2,mode='c'] buffer,
+        DOFMode mode,
+    ):
         cdef AtomTag i
         cdef AtomTag N
         cdef double[3]* buf = cython.cast(cython.pointer(double[3]), buffer.data)
         # Can ignore result since only throws error if NULL buffer is passed
         if atoms is None:
-            dof.dofulator_get_dof_atoms_directional(self.ctx, buffer.shape[0], cython.NULL, buf)
+            dof.dofulator_get_dof_atoms_directional(self.ctx, buffer.shape[0], cython.NULL, mode, buf)
         else:
             atoms = numpy.ascontiguousarray(atoms)
             dof.dofulator_get_dof_atoms_directional(
                 self.ctx,
                 atoms.shape[0],
                 cython.cast(cython.pointer(AtomTag), atoms.data),
+                mode,
                 buf
             )
 

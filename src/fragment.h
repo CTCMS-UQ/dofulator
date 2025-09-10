@@ -30,7 +30,8 @@ struct Fragment {
   Bond* loop_closures;      // Rigid bonds that create kinematic loops
 
   double* dof;              // 3*n_atoms x n_modes matrix of M^1/2 J Q
-  double* dof_total;        // 3*n_atoms vector of total direciontal dof
+  double* dof_total;        // 3*n_atoms vector of total direciontal dof. Rotational only for rigid bodies.
+  double* dof_trans;        // n_atoms elements for translational DoF of each atom (mass frac.)
 };
 
 
@@ -97,7 +98,7 @@ static void fragmentlist_destroy(FragmentList* self) {
  * 6 for rigid bodies, 3 * n_atoms for semi-rigid.
 */
 static inline void fragment_set_max_modes(Fragment* frag) {
-  frag->n_modes = frag->rigid ? 6 : 3 * frag->n_atoms;
+  frag->n_modes = frag->rigid ? 3 : 3 * frag->n_atoms;
 }
 
 

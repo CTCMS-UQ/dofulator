@@ -271,8 +271,8 @@ static inline void pbc_wrap_shortest(const PBC* pbc, double r[3]) {
  * Set the batch size and reallocate working memory
  *
  * Working memory:
- * Max. Jacobian size = MAX((max_semirigid_atoms * 3)^2, (max_rigid_atoms*3 * 6))
- * Max. Eigenvector size = MAX((max_semirigid_atoms * 3)^2, 6^2)
+ * Max. Jacobian size = MAX((max_semirigid_atoms * 3)^2, (max_rigid_atoms*3 * 3))
+ * Max. Eigenvector size = MAX((max_semirigid_atoms * 3)^2, 3^2)
  *
  * Solve process:
  * Build J (in mJQ for loops, or in mJ for trees/rigid)
@@ -297,8 +297,8 @@ static inline void pbc_wrap_shortest(const PBC* pbc, double r[3]) {
 static inline DofulatorResult dofulator_update_batch_size(Dofulator ctx, size_t batch_size) {
   ctx->batch_size = batch_size;
   size_t semirigid_size = 3 * ctx->max_semirigid_atoms * 3 * ctx->max_semirigid_atoms;
-  size_t max_jacobian = MAX(MAX( 3 * ctx->max_rigid_atoms * 6, semirigid_size), ctx->max_K_size);
-  size_t max_eigenvector = MAX(36, semirigid_size);
+  size_t max_jacobian = MAX(MAX( 3 * ctx->max_rigid_atoms * 3, semirigid_size), ctx->max_K_size);
+  size_t max_eigenvector = MAX(3*3, semirigid_size);
   size_t max_scratch_size_single = max_jacobian + max_eigenvector + semirigid_size;
   ctx->working_buf_size = batch_size * max_scratch_size_single;
   double* new_ptr = realloc(ctx->working_buf, sizeof(double) * ctx->working_buf_size);
@@ -663,7 +663,8 @@ DofulatorResult dofulator_finalise_fragments(Dofulator ctx) {
       }
       ctx->dof_buf_semirigid[n_atoms-1] = malloc(sizeof(double) * n_frag * 3 * n_atoms * 3 * n_atoms);
       if (unlikely(!ctx->dof_buf_semirigid[n_atoms-1])) { return DOF_ALLOC_FAILURE; }
-      ctx->dof_total_buf_semirigid[n_atoms-1] = malloc(sizeof(double) * n_frag * 3 * n_atoms);
+      // Allocate 4*n_atoms for total directional DoF due to rotation/vibration (3 elements) + translational DoF per direction (1 element)
+      ctx->dof_total_buf_semirigid[n_atoms-1] = malloc(sizeof(double) * n_frag * 4 * n_atoms);
       if (unlikely(!ctx->dof_total_buf_semirigid[n_atoms-1])) { return DOF_ALLOC_FAILURE; }
     }
   }
@@ -681,9 +682,10 @@ DofulatorResult dofulator_finalise_fragments(Dofulator ctx) {
         ctx->dof_total_buf_rigid[n_atoms-1] = NULL;
         continue;
       }
-      ctx->dof_buf_rigid[n_atoms-1] = malloc(sizeof(double) * n_frag * 3 * n_atoms * 6);
+      ctx->dof_buf_rigid[n_atoms-1] = malloc(sizeof(double) * n_frag * 3 * n_atoms * 3);
       if (unlikely(!ctx->dof_buf_rigid[n_atoms-1])) { return DOF_ALLOC_FAILURE; }
-      ctx->dof_total_buf_rigid[n_atoms-1] = malloc(sizeof(double) * n_frag * 3 * n_atoms);
+      // Allocate 4*n_atoms for total directional DoF due to rotation (3 elements) + translational DoF per direction (1 element)
+      ctx->dof_total_buf_rigid[n_atoms-1] = malloc(sizeof(double) * n_frag * 4 * n_atoms);
       if (unlikely(!ctx->dof_total_buf_rigid[n_atoms-1])) { return DOF_ALLOC_FAILURE; }
     }
   }
@@ -716,10 +718,11 @@ DofulatorResult dofulator_finalise_fragments(Dofulator ctx) {
     }
     frag->dof = dof_buf;
     frag->dof_total = dof_total_buf;
+    frag->dof_trans = dof_total_buf + 3 * frag->n_atoms;
 
     // Increment ready for next fragment
-    dof_buf += (3 * frag->n_atoms * frag->n_modes);
-    dof_total_buf += 3 * frag->n_atoms;
+    dof_buf += 3 * frag->n_atoms * frag->n_modes;
+    dof_total_buf += 4 * frag->n_atoms;
   }
 
   // Rigid
@@ -746,10 +749,11 @@ DofulatorResult dofulator_finalise_fragments(Dofulator ctx) {
     }
     frag->dof = dof_buf;
     frag->dof_total = dof_total_buf;
+    frag->dof_trans = dof_total_buf + 3 * frag->n_atoms;
 
     // Increment ready for next fragment
-    dof_buf += (3 * frag->n_atoms * frag->n_modes);
-    dof_total_buf += 3 * frag->n_atoms;
+    dof_buf += 3 * frag->n_atoms * frag->n_modes;
+    dof_total_buf += 4 * frag->n_atoms;
   }
 
   // Allocate working memory for current batch size
@@ -763,7 +767,7 @@ DofulatorResult dofulator_finalise_fragments(Dofulator ctx) {
 */
 static DofulatorResult fragment_solve_dof(Dofulator ctx, Fragment* frag, double* mJ, double* Q) {
   const size_t n_atoms = frag->n_atoms;
-  const size_t row_stride = frag->rigid ? 6 : 3*n_atoms;
+  const size_t row_stride = frag->rigid ? 3 : 3*n_atoms;
   // Store J^T M J in Q ready for eigensolve
   cblas(dgemm)(
     CblasRowMajor, CblasTrans, CblasNoTrans,
@@ -827,6 +831,13 @@ static DofulatorResult fragment_solve_dof(Dofulator ctx, Fragment* frag, double*
     frag->dof_total[3*a+1] = cblas(ddot)(frag->n_modes, row, 1, row, 1);
     row += row_stride;
     frag->dof_total[3*a+2] = cblas(ddot)(frag->n_modes, row, 1, row, 1);
+
+    // Rigid bodies just solve Jacobian for rotational DoF, so add in translational part
+    if (frag->rigid) {
+      frag->dof_total[3*a] += frag->dof_trans[a];
+      frag->dof_total[3*a + 1] += frag->dof_trans[a];
+      frag->dof_total[3*a + 2] += frag->dof_trans[a];
+    }
   }
   return DOF_SUCCESS;
 }
@@ -914,26 +925,45 @@ DofulatorResult dofulator_precalculate_rigid(Dofulator ctx, const double* mass, 
   ) {
     if (*n_frags == 0) { continue; }
     const size_t n_atoms = ctx->rigid_frags.fragments[ifrag].n_atoms;
-    const size_t mat_size = 3*n_atoms * 6;
+    const size_t mat_size = 3*n_atoms * 3;
     double* mJ = ctx->working_buf;
     double* Q = mJ + mat_size;
     double rij[3];
     for (size_t f = 0; f < *n_frags; ++f, ++ifrag) {
       Fragment* frag = &ctx->rigid_frags.fragments[ifrag];
-      double (*J)[3*n_atoms][6] = (double(*)[3*n_atoms][6])mJ;
+      double (*J)[3*n_atoms][3] = (double(*)[3*n_atoms][3])mJ;
       memset(J, 0, sizeof(*J));
       // Build fragment Jacobian
       const AtomTag root = frag->root_atom;
+      double mass_total = 0;
+      double xcom[3] = {0.};
       for (size_t i = 0; i < frag->n_atoms; ++i) {
         const AtomTag atom = frag->atoms[i];
-        const double root_mass = sqrt(mass[frag->atoms[i]]);
-        (*J)[3*i  ][0] = root_mass;
-        (*J)[3*i+1][1] = root_mass;
-        (*J)[3*i+2][2] = root_mass;
+        const double m = mass[atom];
+        frag->dof_trans[i] = m;
+        mass_total += m;
+
         if (atom == root) { continue; }
 
-        // Get vector from predecessor to atom i
+        // Find CoM.
+        // NOTE: Assumes fragment is smaller than 1/2 box length
         vec_sub(x[atom], x[root], rij);
+        pbc_wrap_shortest(&ctx->pbc, rij);
+        xcom[0] += m * rij[0];
+        xcom[1] += m * rij[1];
+        xcom[2] += m * rij[2];
+      }
+      xcom[0] = xcom[0] / mass_total + x[root][0];
+      xcom[1] = xcom[1] / mass_total + x[root][1];
+      xcom[2] = xcom[2] / mass_total + x[root][2];
+      cblas(dscal)(n_atoms, 1./mass_total, frag->dof_trans, 1);
+
+      for (size_t i = 0; i < frag->n_atoms; ++i) {
+        const AtomTag atom = frag->atoms[i];
+        const double root_mass = sqrt(mass[atom]);
+
+        // Get vector from predecessor to atom i
+        vec_sub(x[atom], xcom, rij);
         pbc_wrap_shortest(&ctx->pbc, rij);
 
         /* Store negative cross operator
@@ -941,14 +971,14 @@ DofulatorResult dofulator_precalculate_rigid(Dofulator ctx, const double* mass, 
          * -z   0    x
          *  y  -x    0
          */
-        (*J)[3*i][4] = root_mass * rij[2];
-        (*J)[3*i][5] = -root_mass * rij[1];
+        (*J)[3*i][1] = root_mass * rij[2];
+        (*J)[3*i][2] = -root_mass * rij[1];
 
-        (*J)[3*i+1][3] = -root_mass * rij[2];
-        (*J)[3*i+1][5] = root_mass * rij[0];
+        (*J)[3*i+1][0] = -root_mass * rij[2];
+        (*J)[3*i+1][2] = root_mass * rij[0];
 
-        (*J)[3*i+2][3] = root_mass * rij[1];
-        (*J)[3*i+2][4] = -root_mass * rij[0];
+        (*J)[3*i+2][0] = root_mass * rij[1];
+        (*J)[3*i+2][1] = -root_mass * rij[0];
       }
       DofulatorResult e = fragment_solve_dof(ctx, frag, mJ, Q);
       if (unlikely(e)) { return e; }
@@ -1171,7 +1201,7 @@ static inline DofulatorResult dofulator_calculate_semirigid(Dofulator ctx, const
         // Z is calculated as Z^T by dgesvd, but stored column major, so use NoTrans
         cblas(dgemm)(
           CblasRowMajor, CblasNoTrans, CblasNoTrans,
-          n_modes, n_modes - rank_K, n_modes,
+          3*n_atoms, n_modes - rank_K, n_modes,
           1.0, &((*J)[0][0]), n_modes,
           &Z[rank_K], n_modes,
           0.0, mJ, n_modes
@@ -1180,14 +1210,19 @@ static inline DofulatorResult dofulator_calculate_semirigid(Dofulator ctx, const
         frag->n_modes = n_modes - rank_K;
       }
 
-      // Scale rows by sqrt(mass) of corresponding atom
+      // Scale rows by sqrt(mass) of corresponding atom.
+      // Also calculate translational DoF
+      double mass_total = 0;
       for (AtomTag a = 0; a < n_atoms; ++a) {
-        // TODO: pre-calculate sqrt(mass) and store on fragment?
-        double root_mass = sqrt(mass[frag->atoms[a]]);
+        const double m = mass[frag->atoms[a]];
+        const double root_mass = sqrt(m);   // TODO: pre-calculate sqrt(mass) and store on fragment?
+        frag->dof_trans[a] = m;
+        mass_total += m;
         cblas(dscal)(frag->n_modes, root_mass, &mJ[3*a*3*n_atoms], 1);
         cblas(dscal)(frag->n_modes, root_mass, &mJ[(3*a+1)*3*n_atoms], 1);
         cblas(dscal)(frag->n_modes, root_mass, &mJ[(3*a+2)*3*n_atoms], 1);
       }
+      cblas(dscal)(frag->n_atoms, 1./mass_total, frag->dof_trans, 1);
 
       DofulatorResult e = fragment_solve_dof(ctx, frag, mJ, Q);
       if (unlikely(e)) { return e; }
@@ -1234,14 +1269,14 @@ DofulatorResult dofulator_calculate(Dofulator ctx, const double* mass, const dou
 /*******************************************************************************
  * Get the total DoF of the atom with index `atom_idx`
 */
-double dofulator_get_dof_atom(const struct Dofulator* ctx, AtomTag atom_idx) {
+double dofulator_get_dof_atom(const struct Dofulator* ctx, AtomTag atom_idx, DOFMode mode) {
   if (atom_idx >= ctx->n_atoms) {
     return 0.;
   }
   FragIndex frag_idx = ctx->frag_map[atom_idx];
   if (!frag_idx.has_frag) {
     // TODO: Account for global CoM velocity constraint
-    return 3.;
+    return mode == DOF_NON_TRANS ? 0 : 3.;
   }
 
   const size_t i = ctx->atom_frag_idx[atom_idx];
@@ -1251,14 +1286,27 @@ double dofulator_get_dof_atom(const struct Dofulator* ctx, AtomTag atom_idx) {
   } else {
     frag = &ctx->semirigid_frags.fragments[frag_idx.idx];
   }
-  return frag->dof_total[3*i] + frag->dof_total[3*i + 1] + frag->dof_total[3*i + 2];
+
+  if (mode == DOF_TRANS) {
+    return 3 * frag->dof_trans[i];
+  }
+  double dof = frag->dof_total[3*i] + frag->dof_total[3*i + 1] + frag->dof_total[3*i + 2];
+  if (mode == DOF_NON_TRANS) {
+    dof -= 3 * frag->dof_trans[i];
+  }
+  return dof;
 }
 
 
 /*******************************************************************************
  * Get the directional DoF of the atom with index `atom_idx`
 */
-void dofulator_get_dof_atom_directional(const struct Dofulator* restrict ctx, AtomTag atom_idx, double dof[restrict 3]) {
+void dofulator_get_dof_atom_directional(
+  const struct Dofulator* restrict ctx,
+  AtomTag atom_idx,
+  DOFMode mode,
+  double dof[restrict 3]
+) {
   dof[0] = dof[1] = dof[2] = 0.;
   if (atom_idx >= ctx->n_atoms) {
     return;
@@ -1266,6 +1314,7 @@ void dofulator_get_dof_atom_directional(const struct Dofulator* restrict ctx, At
   FragIndex frag_idx = ctx->frag_map[atom_idx];
   if (!frag_idx.has_frag) {
     // TODO: Account for global CoM velocity constraint
+    if (mode == DOF_NON_TRANS) return; // 0 for non-translational modes
     dof[0] = dof[1] = dof[2] = 1.;
     return;
   }
@@ -1276,6 +1325,13 @@ void dofulator_get_dof_atom_directional(const struct Dofulator* restrict ctx, At
     frag = &ctx->semirigid_frags.fragments[frag_idx.idx];
   }
   const size_t i = ctx->atom_frag_idx[atom_idx];
+
+  // Return early if only need translational DoF
+  if (mode == DOF_TRANS) {
+    dof[0] = dof[1] = dof[2] = frag->dof_trans[i];
+    return;
+  }
+
   if (frag_idx.rigid) {
     // Rotate into current frame for rigid fragments
     double x[3] = {1., 0., 0.};
@@ -1291,10 +1347,13 @@ void dofulator_get_dof_atom_directional(const struct Dofulator* restrict ctx, At
     // where mJQ_i = rows of sqrt(M)JQ corresponding to atom i, and lambda_m = modal inertia.
     // frag->dof matrix stores sqrt(m)JQ/sqrt(lambda_m)
     double d, rdx, rdy, rdz;
-    for (size_t m = 0; m < 6; ++m) {
-      rdx = frag->dof[ 3*i    * 6 + m];
-      rdy = frag->dof[(3*i+1) * 6 + m];
-      rdz = frag->dof[(3*i+2) * 6 + m];
+    if (mode != DOF_NON_TRANS) {
+      dof[0] = dof[1] = dof[2] = frag->dof_trans[i];
+    }
+    for (size_t m = 0; m < 3; ++m) {
+      rdx = frag->dof[ 3*i    * 3 + m];
+      rdy = frag->dof[(3*i+1) * 3 + m];
+      rdz = frag->dof[(3*i+2) * 3 + m];
       d = x[0]*rdx + x[1]*rdy + x[2]*rdz;
       dof[0] += d*d;
       d = y[0]*rdx + y[1]*rdy + y[2]*rdz;
@@ -1303,11 +1362,18 @@ void dofulator_get_dof_atom_directional(const struct Dofulator* restrict ctx, At
       dof[2] += d*d;
     }
   } else {
+    // Semi-rigid
     dof[0] = frag->dof_total[3*i];
     dof[1] = frag->dof_total[3*i+1];
     dof[2] = frag->dof_total[3*i+2];
-  }
 
+    // For non-translational modes, subtract out translational DoF
+    if (mode == DOF_NON_TRANS) {
+      dof[0] -= frag->dof_trans[i];
+      dof[1] -= frag->dof_trans[i];
+      dof[2] -= frag->dof_trans[i];
+    }
+  }
 }
 
 
@@ -1320,6 +1386,7 @@ double* dofulator_get_dof_atoms(
   const struct Dofulator* ctx,
   const size_t n_atoms,
   const AtomTag* atoms,
+  DOFMode mode,
   double* restrict dof
 ) {
   if (dof == NULL) {
@@ -1328,11 +1395,11 @@ double* dofulator_get_dof_atoms(
   }
   if (atoms) {
     for (size_t i = 0; i < n_atoms; ++i) {
-      dof[i] = dofulator_get_dof_atom(ctx, atoms[i]);
+      dof[i] = dofulator_get_dof_atom(ctx, atoms[i], mode);
     }
   } else {
     for (size_t i = 0; i < n_atoms; ++i) {
-      dof[i] = dofulator_get_dof_atom(ctx, i);
+      dof[i] = dofulator_get_dof_atom(ctx, i, mode);
     }
   }
   return dof;
@@ -1348,6 +1415,7 @@ double* dofulator_get_dof_atoms_directional(
   const struct Dofulator* restrict ctx,
   const size_t n_atoms,
   const AtomTag* restrict atoms,
+  DOFMode mode,
   double dof[restrict][3]
 ) {
   if (dof == NULL) {
@@ -1356,11 +1424,11 @@ double* dofulator_get_dof_atoms_directional(
   }
   if (atoms) {
     for (size_t i = 0; i < n_atoms; ++i) {
-      dofulator_get_dof_atom_directional(ctx, atoms[i], dof[i]);
+      dofulator_get_dof_atom_directional(ctx, atoms[i], mode, dof[i]);
     }
   } else {
     for (size_t i = 0; i < n_atoms; ++i) {
-      dofulator_get_dof_atom_directional(ctx, i, dof[i]);
+      dofulator_get_dof_atom_directional(ctx, i, mode, dof[i]);
     }
   }
   return &dof[0][0];

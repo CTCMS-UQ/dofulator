@@ -169,38 +169,49 @@ DofulatorResult dofulator_precalculate_rigid(Dofulator ctx, const double* mass, 
 // Assumes `dofulator_precalculate_rigid()` has been called.
 DofulatorResult dofulator_calculate(Dofulator ctx, const double* mass, const double x[][3]);
 
+typedef enum DOFMode {
+  DOF_ALL,
+  DOF_TRANS,
+  DOF_NON_TRANS,
+} DOFMode;
+
 // Get the total DoF of atom with index `atom_idx`.
 // Assumes `dofulator_calculate()` has been called.
-double dofulator_get_dof_atom(const struct Dofulator* ctx, AtomTag atom_idx);
+double dofulator_get_dof_atom(const struct Dofulator* ctx, AtomTag atom_idx, DOFMode mode);
 
 // Get the directional DoF of atom with index `atom_idx` (returned in `dof` as `{x,y,z}`).
 // Assumes `dofulator_calculate()` has been called.
 void dofulator_get_dof_atom_directional(
   const struct Dofulator* restrict ctx,
   AtomTag atom_idx,
+  DOFMode mode,
   double dof[restrict 3]
 );
 
-// Get the total DoF of the `n_atoms` atoms with indices in `atoms`. Returned in `dof` and as return value.
+// Get the total DoF of the `n_atoms` atoms with indices in `atoms`.
+// Returned in `dof` and as return value.
 // Allocates `dof` if NULL is passed in.
 // Returns NULL if `dof` is NULL and allocation fails.
-// Returns results for the first n_atoms atoms if `atoms` is NULL.
+// Returns results for the first `n_atoms` atoms if `atoms` is NULL.
 // Assumes `dofulator_calculate()` has been called.
 double* dofulator_get_dof_atoms(
   const struct Dofulator* restrict ctx, const size_t n_atoms,
   const AtomTag* restrict atoms,
+  DOFMode mode,
   double* restrict dof
 );
 
-// Get the directional DoF of the `n_atoms` atoms with indices in `atoms`. Returned in `dof` and as return value.
+// Get the directional DoF of the `n_atoms` atoms with indices in `atoms`.
+// Returned in `dof` and as return value.
 // Allocates `dof` if NULL is passed in.
 // Returns NULL if `dof` is NULL and allocation fails.
-// Returns results for the first n_atoms atoms if `atoms` is NULL.
+// Returns results for the first `n_atoms` atoms if `atoms` is NULL.
 // Assumes `dofulator_calculate()` has been called.
 double* dofulator_get_dof_atoms_directional(
   const struct Dofulator* restrict ctx,
   const size_t n_atoms,
   const AtomTag* restrict atoms,
+  DOFMode mode,
   double dof[restrict][3]
 );
 
