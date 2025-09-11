@@ -14,7 +14,7 @@ def modes_from_str(mode: str):
     return {
         'all': DOF_ALL,
         'translational': DOF_TRANS,
-        'non-translational': DOF_NON_TRANS,
+        'rovibrational': DOF_ROVIB,
     }[mode]
 
 def get_exception(DofulatorResult err):
@@ -180,7 +180,7 @@ cdef class CDofulator:
         Get the DoF of atom with index `i`.
         `mode = DOF_ALL`: get total DoF
         `mode = DOF_TRANS`: get total translational DoF
-        `mode = DOF_NON_TRANS`: get total rotational + vibrational DoF
+        `mode = DOF_ROVIB`: get total rotational + vibrational DoF
         """
         if i >= self.n_atoms:
             raise IndexError
@@ -191,7 +191,7 @@ cdef class CDofulator:
         Get the DoF of atom with index `i` in each Cartesian direction
         `mode = DOF_ALL`: get total DoF from all modes
         `mode = DOF_TRANS`: get translational DoF
-        `mode = DOF_NON_TRANS`: get DoF from rotational + vibrational modes
+        `mode = DOF_ROVIB`: get DoF from rotational + vibrational modes
         """
         if i >= self.n_atoms:
             raise IndexError

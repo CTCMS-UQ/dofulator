@@ -111,7 +111,7 @@ class TestMDADofulator:
                 err_msg='Incorrect total DoF with many kinematic loops + overconstrained sections'
             )
         np.testing.assert_array_almost_equal(
-                d.current_frame_dof('directional', 'translational') + d.current_frame_dof('directional', 'non-translational'),
+                d.current_frame_dof('directional', 'translational') + d.current_frame_dof('directional', 'rovibrational'),
                 d.current_frame_dof('directional', 'all'),
                 err_msg='Inconsistent partitioning between translational and rotational/vibrational modes'
             )

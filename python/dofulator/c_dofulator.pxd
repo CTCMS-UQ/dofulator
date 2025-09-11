@@ -52,7 +52,7 @@ cdef extern from "dofulator.h":
     cdef enum DOFMode:
         DOF_ALL
         DOF_TRANS
-        DOF_NON_TRANS
+        DOF_ROVIB
 
     Dofulator dofulator_create(AtomTag n_atoms)
     void dofulator_destroy(Dofulator* ctx)

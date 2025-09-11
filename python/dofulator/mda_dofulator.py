@@ -45,8 +45,8 @@ class MDADofulator(AnalysisBase):
         total DoF per atom (`atomic`) or the DoF in each Cartesian direction
         ('directional')
 
-        `dof_mode`: `'all'|'translational'|'non-translational'` sets whether to include
-        contirbutions from all modes, translational modes only, or non-translational modes,
+        `dof_mode`: `'all'|'translational'|'rovibrational'` sets whether to include
+        contirbutions from all modes, translational modes only, or rovibrational modes,
         respectively.
 
         `null_space_thresh`: Threshold for calculating null space of loop closure matrix.
@@ -290,7 +290,7 @@ class MDADofulator(AnalysisBase):
         `mode` = `'atomic'|'directional'` specifies whether atomic or directional DoF is required
         or use current setting if `None` is specified (default)
         
-        'dof_modes' = `'all'|'translational'|'non-translational'` specifies which modes to include
+        'dof_modes' = `'all'|'translational'|'rovibrational'` specifies which modes to include
         or use current setting if `None` is specified (default)
         """
         if mode is None:

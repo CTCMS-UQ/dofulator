@@ -1276,7 +1276,7 @@ double dofulator_get_dof_atom(const struct Dofulator* ctx, AtomTag atom_idx, DOF
   FragIndex frag_idx = ctx->frag_map[atom_idx];
   if (!frag_idx.has_frag) {
     // TODO: Account for global CoM velocity constraint
-    return mode == DOF_NON_TRANS ? 0 : 3.;
+    return mode == DOF_ROVIB ? 0 : 3.;
   }
 
   const size_t i = ctx->atom_frag_idx[atom_idx];
@@ -1291,7 +1291,7 @@ double dofulator_get_dof_atom(const struct Dofulator* ctx, AtomTag atom_idx, DOF
     return 3 * frag->dof_trans[i];
   }
   double dof = frag->dof_total[3*i] + frag->dof_total[3*i + 1] + frag->dof_total[3*i + 2];
-  if (mode == DOF_NON_TRANS) {
+  if (mode == DOF_ROVIB) {
     dof -= 3 * frag->dof_trans[i];
   }
   return dof;
@@ -1314,7 +1314,7 @@ void dofulator_get_dof_atom_directional(
   FragIndex frag_idx = ctx->frag_map[atom_idx];
   if (!frag_idx.has_frag) {
     // TODO: Account for global CoM velocity constraint
-    if (mode == DOF_NON_TRANS) return; // 0 for non-translational modes
+    if (mode == DOF_ROVIB) return; // 0 for rovibrational modes of lone atoms
     dof[0] = dof[1] = dof[2] = 1.;
     return;
   }
@@ -1347,7 +1347,7 @@ void dofulator_get_dof_atom_directional(
     // where mJQ_i = rows of sqrt(M)JQ corresponding to atom i, and lambda_m = modal inertia.
     // frag->dof matrix stores sqrt(m)JQ/sqrt(lambda_m)
     double d, rdx, rdy, rdz;
-    if (mode != DOF_NON_TRANS) {
+    if (mode != DOF_ROVIB) {
       dof[0] = dof[1] = dof[2] = frag->dof_trans[i];
     }
     for (size_t m = 0; m < 3; ++m) {
@@ -1367,8 +1367,8 @@ void dofulator_get_dof_atom_directional(
     dof[1] = frag->dof_total[3*i+1];
     dof[2] = frag->dof_total[3*i+2];
 
-    // For non-translational modes, subtract out translational DoF
-    if (mode == DOF_NON_TRANS) {
+    // For rovibrational modes, subtract out translational DoF
+    if (mode == DOF_ROVIB) {
       dof[0] -= frag->dof_trans[i];
       dof[1] -= frag->dof_trans[i];
       dof[2] -= frag->dof_trans[i];

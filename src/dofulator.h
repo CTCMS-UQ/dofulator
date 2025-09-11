@@ -172,7 +172,7 @@ DofulatorResult dofulator_calculate(Dofulator ctx, const double* mass, const dou
 typedef enum DOFMode {
   DOF_ALL,
   DOF_TRANS,
-  DOF_NON_TRANS,
+  DOF_ROVIB,
 } DOFMode;
 
 // Get the total DoF of atom with index `atom_idx`.

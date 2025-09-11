@@ -46,12 +46,12 @@ class LocalTemperature(AnalysisBase):
                  of each selection.
             'directional': Use directional DoF to calculate x,y,z kinetic temperatures.
 
-        `dof_modes'`: `'all'|'translational'|'non-translational'`
+        `dof_modes'`: `'all'|'translational'|'rovibrational'`
             Passed through to `MDADofulator` instance - determines which modes to include
             for temperature calculation.
             'all': Use all modes
             'translational': Use translational modes only (temperature calculated from CoM velocity)
-            'non-translational': Use rotational/vibrational modes only (temperature calculated from v - v_com)
+            'rovibrational': Use rotational + vibrational modes only (temperature calculated from v - v_com)
 
         `store_dof_results`: `bool` (default False)
             Set `True` if the direct results from `dofulator` are also required,

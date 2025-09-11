@@ -176,17 +176,17 @@ dofulator_get_dof_atom_directional(ctx, atom_index, DOF_TRANS, directional_dof);
 ```
 and for rotational/vibrational,
 ```C
-double atom_non_trans_dof = dofulator_get_dof_atom(ctx, atom_index, DOF_NON_TRANS);
+double atom_non_trans_dof = dofulator_get_dof_atom(ctx, atom_index, DOF_ROVIB);
 ```
 or
 ```C
 double directional_non_trans_dof[3];
-dofulator_get_dof_atom_directional(ctx, atom_index, DOF_NON_TRANS, directional_dof);
+dofulator_get_dof_atom_directional(ctx, atom_index, DOF_ROVIB, directional_dof);
 ```
-Note, the easiest way to separate rotational and vibrational DoF
-in the case of semi-rigid fragments is to additionally calculate
-the DoF of the fragment as if it were a rigid body, in which
-case `DOF_NON_TRANS` corresponds to the rotational DoF.
+Note, rotational modes of a semi-rigid fragment can be considered approximately by
+treating the fragment as a rigid body in a particular conformation (using a separate `ctx`),
+but beware that rotational and vibrational degrees of freedom are not separable
+in general due to Coriolis coupling.
 
 
 If DoF of a list of atoms is required, this can be queried through
@@ -405,7 +405,7 @@ d = MDADofulator(
     mode='atomic',          # (default) Only calculate total DoF of each atom
                             #   Alternatively, set mode='directional' to get x,y,z DoF
     dof_modes='all',        # (default) Use DoF from all modes. Alternatively, 'translational' gives
-                            #   translational contributions or 'non-translational' gives rotational/vibrational
+                            #   translational contributions or 'rovibrational' gives rotational + vibrational
                             #   contributions.
     verbose=True,           # (default), set `False` to disable progress bar (as for other MDA classes)
     null_space_thresh=None, # (default) - Use the C default value for null space threshold.
@@ -433,7 +433,7 @@ To query atomic/directional, translational or rotational/vibrational DoF compone
 on the current frame of the trajectory once the frame has already been processed
 with `d.run()` or `d.run_single_frame()`, `d.current_frame_dof()` is provided.
 For example, to get the directional contributions of rotational/vibrational modes,
-use `d.current_frame_dof('directional', 'non-translational')`.
+use `d.current_frame_dof('directional', 'rovibrational')`.
 
 To calculate local temperatures, a `LocalTemperature` analysis class is provided,
 where each local temperature is defined by an
@@ -459,7 +459,7 @@ t = LocalTemperature(
                                 #   Set mode='directional' to calculate directional temperatures.
     dof_modes='all',            # (default) Calculate temperature of all modes
                                 #   Set dof_modes='translational' for translational temperature,
-                                #   or dof_modes='non-translational' for rotational + vibrational temperature
+                                #   or dof_modes='rovibrational' for rotational + vibrational temperature
     verbose=True,               # (default) as above
     )
 
