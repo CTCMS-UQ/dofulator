@@ -4,9 +4,9 @@ This library provides a degrees of freedom (DoF) calculator for molecular dynami
 simulations which use rigid geometry constraints.
 Per-atom and per-direction DoF are calculated using the theory described
 in [J. Chem. Theory Comput. 2024, 20, 23, 10615–10624](https://doi.org/10.1021/acs.jctc.4c00957),
-which are applicable to both rigid bodies and semi-rigid fragments.
+which is applicable to both rigid bodies and semi-rigid fragments.
 Details of the algorithm, and handling of various constraint types and closed-loop
-constraint topology are discussed in [this preprint](https://dx.doi.org/10.2139/ssrn.5187317).
+constraint topology are discussed in [Comput. Phys. Commun. 2026, 320, 110003](https://doi.org/10.1016/j.cpc.2025.110003).
 
 The core library is provided as a C API (see [the usage docs](doc/usage.md#C) or [dofulator.h](src/dofulator.h)).
 A Python wrapper is also provided, and includes some plugins compatible with
@@ -72,4 +72,4 @@ t.run()
 
 When using dofulator in published work, please cite the following:
 1. S. Sanderson, S. R. Tee, and D. J. Searles; Local Temperature Measurement in Molecular Dynamics Simulations with Rigid Constraints. *Journal of Chemical Theory and Computation* **2024** *20* (23), 10615–10624. DOI: [10.1021/acs.jctc.4c00957](https://doi.org/10.1021/acs.jctc.4c00957)
-2. S. Sanderson, S. Alosious, and D. J. Searles; Dofulator: A Tool for Calculating Degrees of Freedom of Atoms in Molecules with Geometry Constraints. *Available at SSRN* **2025**, DOI: [10.2139/ssrn.5187317](http://dx.doi.org/10.2139/ssrn.5187317)
+2. S. Sanderson, S. Alosious, and D. J. Searles; Dofulator: A Tool for Calculating Degrees of Freedom of Atoms in Molecules with Geometry Constraints. *Computer Physics Communications* **2026** *320*, 110003, DOI: [10.1016/j.cpc.2025.110003](https://doi.org/10.1016/j.cpc.2025.110003)
